@@ -33,16 +33,6 @@ static void _setPartialRamArea(epd_model_t* epd, uint16_t x, uint16_t y, uint16_
     EPD_Write(SSD16xx_RAM_YPOS, y % 256, y / 256, (y + h - 1) % 256, (y + h - 1) / 256);
     EPD_Write(SSD16xx_RAM_YCOUNT, y % 256, y / 256);
 }
-void SSD16xx_Dump_LUT(void) {
-    uint8_t lut[128];
-
-    EPD_WriteCmd(SSD16xx_READ_LUT);
-    EPD_ReadData(lut, sizeof(lut));
-
-    NRF_LOG_DEBUG("=== LUT BEGIN ===\n");
-    NRF_LOG_HEXDUMP_DEBUG(lut, sizeof(lut));
-    NRF_LOG_DEBUG("=== LUT END ===\n");
-}
 
 void SSD16xx_Init(epd_model_t* epd) {
     EPD_Reset(true, 10);
@@ -62,10 +52,8 @@ static void SSD16xx_Refresh(epd_model_t* epd) {
     NRF_LOG_DEBUG("[EPD]: refresh begin\n");
     NRF_LOG_DEBUG("[EPD]: temperature: %d\n", SSD16xx_Read_Temp(epd));
     SSD16xx_Update(0xF7);
-    SSD16xx_WaitBusy(30000);
+    SSD16xx_WaitBusy(UINT16_MAX);
     NRF_LOG_DEBUG("[EPD]: refresh end\n");
-
-    //    SSD16xx_Dump_LUT();
 
     _setPartialRamArea(epd, 0, 0, epd->width, epd->height);  // DO NOT REMOVE!
 }

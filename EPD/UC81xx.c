@@ -49,22 +49,9 @@ void UC81xx_Refresh(epd_model_t* epd) {
     EPD_WriteCmd(UC81xx_DRF);
     if (epd->color == COLOR_BWRY) EPD_WriteByte(0x00);
     delay(100);
-    UC81xx_WaitBusy(30000);
+    UC81xx_WaitBusy(UINT16_MAX);
 
     NRF_LOG_DEBUG("[EPD]: refresh end\n");
-}
-
-void UC81xx_Dump_OTP(epd_model_t* epd) {
-    uint8_t data[128];
-
-    EPD_Write(UC81xx_ROTP, 0x00);
-
-    NRF_LOG_DEBUG("=== OTP BEGIN ===\n");
-    for (int i = 0; i < 0xFFF; i += sizeof(data)) {
-        EPD_ReadData(data, sizeof(data));
-        NRF_LOG_HEXDUMP_DEBUG(data, sizeof(data));
-    }
-    NRF_LOG_DEBUG("=== OTP END ===\n");
 }
 
 void UC81xx_Init(epd_model_t* epd) {

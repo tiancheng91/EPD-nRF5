@@ -10,8 +10,6 @@
 #include "nordic_common.h"
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define GFX_printf_styled(gfx, fg, bg, font, ...) \
     GFX_setTextColor(gfx, fg, bg);                \
     GFX_setFont(gfx, font);                       \

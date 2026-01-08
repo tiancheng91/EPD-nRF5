@@ -1,6 +1,7 @@
 #include "icalendar.h"
 
 #include <ctype.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "nrf_log.h"
@@ -88,25 +89,16 @@ static uint32_t parse_icalendar_datetime(const char* str, uint16_t len) {
 static bool strcasecmp_prefix(const char* str, const char* prefix, uint16_t len) {
     uint16_t i;
     for (i = 0; prefix[i] != '\0' && i < len; i++) {
-        if (tolower(str[i]) != tolower(prefix[i])) {
+        if (tolower((unsigned char)str[i]) != tolower((unsigned char)prefix[i])) {
             return false;
         }
     }
     return prefix[i] == '\0';
 }
 
-// 跳过空白字符
-static const char* skip_whitespace(const char* str) {
-    while (*str == ' ' || *str == '\t') {
-        str++;
-    }
-    return str;
-}
-
 // 解析iCalendar文本中的一行（处理行折叠）
 static const char* parse_line(const char* text, uint16_t text_len, uint16_t* pos, char* line_buf, uint16_t line_buf_size) {
     uint16_t line_pos = 0;
-    bool continuation = false;
 
     while (*pos < text_len && line_pos < line_buf_size - 1) {
         char c = text[*pos];
@@ -120,7 +112,6 @@ static const char* parse_line(const char* text, uint16_t text_len, uint16_t* pos
 
             // 检查下一行是否是续行
             if (*pos < text_len && (text[*pos] == ' ' || text[*pos] == '\t')) {
-                continuation = true;
                 // 跳过续行的前导空白
                 while (*pos < text_len && (text[*pos] == ' ' || text[*pos] == '\t')) {
                     (*pos)++;
@@ -244,18 +235,6 @@ ret_code_t todolist_parse_icalendar(uint8_t* data, uint16_t length) {
 
         // 解析 DTSTART
         if (strcasecmp_prefix(field_name, "DTSTART", 7)) {
-            // 检查是否有 VALUE=DATE 参数
-            bool is_date_only = false;
-            for (i = 0; i < field_name_len; i++) {
-                if (line[i] == ';') {
-                    const char* param = &line[i + 1];
-                    if (strcasecmp_prefix(param, "VALUE=DATE", 10)) {
-                        is_date_only = true;
-                        break;
-                    }
-                }
-            }
-
             uint16_t value_len = strlen(field_value);
             current_item.start_timestamp = parse_icalendar_datetime(field_value, value_len);
             continue;

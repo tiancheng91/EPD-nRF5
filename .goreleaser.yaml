@@ -1,0 +1,48 @@
+# GoReleaser 配置文件
+# 用于构建 pusher 二进制包
+
+project_name: pusher
+
+builds:
+  - id: pusher
+    main: ./pusher
+    binary: pusher
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    # macOS 需要 CGO 来使用蓝牙库 (darwin)
+    # 注意：由于使用了平台特定的蓝牙库，某些平台可能无法交叉编译
+    # 建议：Linux 在 Ubuntu runner 上构建，macOS 需要 macOS runner 或交叉编译工具链
+    env:
+      - CGO_ENABLED=1
+    # 跳过无法构建的平台（如果编译失败）
+    skip: false
+
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - pusher/README.md:README.md
+    # 只打包二进制文件，README 可选
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
+
+# 发布到 GitHub Releases
+release:
+  mode: replace
+  # 仅在推送 tag 时发布
+
+# 可选：生成 changelog
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+

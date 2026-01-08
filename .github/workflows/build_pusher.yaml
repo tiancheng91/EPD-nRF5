@@ -1,0 +1,65 @@
+name: Build Pusher
+
+on:
+  push:
+    tags:
+      - "pusher-v*"
+  pull_request:
+    paths:
+      - "pusher/**"
+      - ".github/workflows/build_pusher.yaml"
+      - ".goreleaser.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  # packages: write  # 如果需要发布 Docker 镜像
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # GoReleaser 需要完整历史
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      # 注意：由于 pusher 使用 CGO 和蓝牙库，跨平台编译可能有限制
+      # macOS 二进制需要在 macOS runner 上构建（或使用交叉编译工具链）
+      # Linux 二进制可以在 Ubuntu runner 上构建
+      # Windows 二进制可能需要额外的工具链
+      
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # 仅在 push tags 时发布，PR 时只构建不发布
+        if: github.event_name != 'pull_request'
+
+      - name: Run GoReleaser (snapshot)
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --snapshot --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # PR 时只构建快照版本
+        if: github.event_name == 'pull_request'
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pusher-binaries
+          path: dist/*
+        if: always()
+

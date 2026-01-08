@@ -1,0 +1,143 @@
+name: Build Pusher
+
+on:
+  push:
+    tags:
+      - "pusher-v*"  # 带应用前缀的 semver 标签格式，如 pusher-v1.0.0
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (pusher-v* format, e.g., pusher-v1.0.0)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false  # 一个平台失败不影响其他平台
+      matrix:
+        include:
+          # macOS 平台 - 需要在 macOS runner 上构建（因为需要 CGO 和蓝牙库）
+          - os: macos-latest
+            platform: darwin-amd64
+            runner: macos-latest
+          - os: macos-latest
+            platform: darwin-arm64
+            runner: macos-latest
+          # Linux 平台
+          - os: ubuntu-latest
+            platform: linux-amd64
+            runner: ubuntu-latest
+          - os: ubuntu-latest
+            platform: linux-arm64
+            runner: ubuntu-24.04-arm
+          # Windows 平台
+          - os: windows-latest
+            platform: windows-amd64
+            runner: windows-latest
+    runs-on: ${{ matrix.runner }}
+    continue-on-error: true  # 构建失败时继续执行，不中断工作流
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Install dependencies (Linux)
+        if: contains(matrix.runner, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev pkg-config gcc
+
+      - name: Install dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install pkg-config
+
+      - name: Build
+        working-directory: pusher
+        continue-on-error: true  # 构建失败时继续执行
+        run: make build-${{ matrix.platform }} || echo "构建 ${{ matrix.platform }} 失败，跳过"
+
+      - name: Upload artifacts
+        if: success() || failure()  # 即使构建失败也尝试上传（可能没有文件）
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: pusher-${{ matrix.platform }}
+          path: pusher/dist/pusher_${{ matrix.platform }}*
+          retention-days: 1
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/pusher-v')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: version
+        run: |
+          TAG="${{ github.ref_name }}"
+          # 从 pusher-v1.0.0 中提取版本号
+          if [[ "$TAG" =~ ^pusher-v(.+)$ ]]; then
+            VERSION="${BASH_REMATCH[1]}"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "Extracted version: $VERSION"
+          else
+            echo "Error: Tag format not recognized: $TAG (expected pusher-v* format)"
+            exit 1
+          fi
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          # 复制所有构建产物
+          find artifacts -type f -name "pusher_*" -exec cp {} release/ \;
+          # 生成 checksums
+          cd release
+          sha256sum * > pusher_${{ steps.version.outputs.version }}_checksums.txt || shasum -a 256 * > pusher_${{ steps.version.outputs.version }}_checksums.txt
+          ls -lh
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Pusher ${{ steps.version.outputs.version }}
+          body: |
+            ## Pusher Release ${{ steps.version.outputs.version }}
+            
+            Pusher 二进制文件发布
+            
+            ### 下载
+            
+            请根据您的平台下载对应的二进制文件：
+            - **macOS (Intel)**: `pusher_darwin-amd64`
+            - **macOS (Apple Silicon)**: `pusher_darwin-arm64`
+            - **Linux (AMD64)**: `pusher_linux-amd64`
+            - **Linux (ARM64)**: `pusher_linux-arm64`
+            - **Windows (64-bit)**: `pusher_windows-amd64.exe`
+            
+            ### 校验
+            
+            下载后可以使用以下命令校验文件：
+            ```bash
+            sha256sum -c pusher_${{ steps.version.outputs.version }}_checksums.txt
+            ```
+          files: release/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

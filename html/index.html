@@ -61,6 +61,27 @@
 			</div>
 		</fieldset>
 		<fieldset>
+			<legend>待办事项</legend>
+			<div class="flex-container">
+				<div class="flex-group" style="width: 100%;">
+					<label for="todolistFile" style="display: block; margin-bottom: 5px;">选择iCalendar文件 (.ics):</label>
+					<input type="file" id="todolistFile" accept=".ics" onchange="parseIcsFile()" style="width: 100%; padding: 5px;">
+					<div id="todolistInfo" style="margin-top: 10px; padding: 10px; background-color: #f5f5f5; border-radius: 4px; display: none;">
+						<small id="todolistInfoText" style="color: #666;"></small>
+					</div>
+				</div>
+			</div>
+			<div class="flex-container" style="margin-top: 10px;">
+				<div class="flex-group">
+					<button id="sendTodolistbutton" type="button" class="primary" onclick="sendTodolist()">上传日历</button>
+					<button type="button" class="secondary" onclick="document.getElementById('todolistFile').value = ''; document.getElementById('todolistInfo').style.display = 'none'; todolistData = null;">清空</button>
+				</div>
+				<div class="flex-group right">
+					<small style="color: #666;">提示：自动过滤今日之前的事项，只显示当日事项</small>
+				</div>
+			</div>
+		</fieldset>
+		<fieldset>
 			<legend>蓝牙传图</legend>
 			<div class="flex-container">
 				<input type="file" id="imageFile" accept=".png,.jpg,.bmp,.webp,.jpeg" onchange="updateImage()">

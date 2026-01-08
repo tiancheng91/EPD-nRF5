@@ -3,6 +3,7 @@ let epdService, epdCharacteristic;
 let startTime, msgIndex, appVersion;
 let canvas, ctx, textDecoder;
 let paintManager, cropManager;
+let todolistData = null; // 存储解析后的待办事项数据
 
 const EpdCmd = {
   SET_PINS: 0x00,
@@ -14,6 +15,8 @@ const EpdCmd = {
   SLEEP: 0x06,
 
   SET_TIME: 0x20,
+  SET_WEEK_START: 0x21,
+  SET_TODOLIST: 0x22,
 
   WRITE_IMG: 0x30, // v1.6
 
@@ -153,6 +156,229 @@ async function clearScreen() {
     await write(EpdCmd.CLEAR);
     addLog("清屏指令已发送！");
     addLog("屏幕刷新完成前请不要操作。");
+  }
+}
+
+// 解析iCalendar文件并过滤今日之前的事项
+async function parseIcsFile() {
+  const fileInput = document.getElementById('todolistFile');
+  const infoDiv = document.getElementById('todolistInfo');
+  const infoText = document.getElementById('todolistInfoText');
+  
+  if (!fileInput.files || fileInput.files.length === 0) {
+    infoDiv.style.display = 'none';
+    todolistData = null;
+    return;
+  }
+
+  const file = fileInput.files[0];
+  if (!file.name.toLowerCase().endsWith('.ics')) {
+    infoText.textContent = '错误：请选择.ics格式的文件';
+    infoDiv.style.display = 'block';
+    infoDiv.style.backgroundColor = '#fee';
+    todolistData = null;
+    return;
+  }
+
+  try {
+    const text = await file.text();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayTimestamp = Math.floor(today.getTime() / 1000);
+
+    // 先处理行折叠，合并续行
+    const unfoldedLines = [];
+    let currentLine = '';
+    const lines = text.split(/\r?\n/);
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      // 如果行以空格或制表符开头，是上一行的续行
+      if (line.match(/^[ \t]/)) {
+        currentLine += line.substring(1);
+      } else {
+        if (currentLine) {
+          unfoldedLines.push(currentLine);
+        }
+        currentLine = line;
+      }
+    }
+    if (currentLine) {
+      unfoldedLines.push(currentLine);
+    }
+
+    // 解析iCalendar文件
+    const todos = [];
+    let currentTodo = null;
+    let inVtodo = false;
+
+    for (let i = 0; i < unfoldedLines.length; i++) {
+      const line = unfoldedLines[i];
+      const colonIndex = line.indexOf(':');
+      if (colonIndex === -1) continue;
+
+      // 处理字段名中的参数（如 DTSTART;VALUE=DATE-TIME:...）
+      const fieldPart = line.substring(0, colonIndex);
+      const semicolonIndex = fieldPart.indexOf(';');
+      const fieldName = (semicolonIndex >= 0 ? fieldPart.substring(0, semicolonIndex) : fieldPart).toUpperCase();
+      const fieldValue = line.substring(colonIndex + 1);
+
+      if (fieldName === 'BEGIN' && fieldValue === 'VTODO') {
+        inVtodo = true;
+        currentTodo = {};
+      } else if (fieldName === 'END' && fieldValue === 'VTODO') {
+        if (currentTodo && currentTodo.SUMMARY && currentTodo.DTSTART) {
+          // 检查日期是否为今天或之后
+          const dtstart = parseIcalDateTime(currentTodo.DTSTART);
+          if (dtstart >= todayTimestamp) {
+            todos.push(currentTodo);
+          }
+        }
+        inVtodo = false;
+        currentTodo = null;
+      } else if (inVtodo && currentTodo) {
+        if (fieldName === 'SUMMARY') {
+          currentTodo.SUMMARY = unescapeIcalValue(fieldValue);
+        } else if (fieldName === 'DTSTART') {
+          // 保存完整的DTSTART行（包括参数）
+          currentTodo.DTSTART = line.substring(colonIndex + 1);
+          currentTodo.DTSTART_FULL = line; // 保存完整行以便后续使用
+        } else if (fieldName === 'STATUS') {
+          currentTodo.STATUS = fieldValue;
+        } else if (fieldName === 'PRIORITY') {
+          currentTodo.PRIORITY = fieldValue;
+        } else if (fieldName === 'UID') {
+          currentTodo.UID = fieldValue;
+        }
+      }
+    }
+
+    // 按开始时间排序
+    todos.sort((a, b) => {
+      const timeA = parseIcalDateTime(a.DTSTART);
+      const timeB = parseIcalDateTime(b.DTSTART);
+      return timeA - timeB;
+    });
+
+    // 生成过滤后的iCalendar数据
+    let icalContent = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\n';
+    todos.forEach(todo => {
+      icalContent += 'BEGIN:VTODO\r\n';
+      if (todo.UID) icalContent += `UID:${todo.UID}\r\n`;
+      if (todo.SUMMARY) icalContent += `SUMMARY:${escapeIcalValue(todo.SUMMARY)}\r\n`;
+      if (todo.DTSTART_FULL) {
+        // 使用完整的DTSTART行（包括参数）
+        icalContent += todo.DTSTART_FULL + '\r\n';
+      } else if (todo.DTSTART) {
+        icalContent += `DTSTART:${todo.DTSTART}\r\n`;
+      }
+      if (todo.STATUS) icalContent += `STATUS:${todo.STATUS}\r\n`;
+      if (todo.PRIORITY) icalContent += `PRIORITY:${todo.PRIORITY}\r\n`;
+      icalContent += 'END:VTODO\r\n';
+    });
+    icalContent += 'END:VCALENDAR\r\n';
+
+    todolistData = icalContent;
+
+    const totalCount = todos.length;
+    const todayCount = todos.filter(t => {
+      const dt = parseIcalDateTime(t.DTSTART);
+      const dtDate = new Date(dt * 1000);
+      return dtDate.toDateString() === today.toDateString();
+    }).length;
+
+    infoText.textContent = `已解析 ${totalCount} 个待办事项（今日 ${todayCount} 个，未来 ${totalCount - todayCount} 个）`;
+    infoDiv.style.display = 'block';
+    infoDiv.style.backgroundColor = '#efe';
+    addLog(`已解析iCalendar文件：${totalCount} 个待办事项（今日 ${todayCount} 个）`);
+
+  } catch (error) {
+    console.error('解析iCalendar文件失败:', error);
+    infoText.textContent = '错误：解析文件失败 - ' + error.message;
+    infoDiv.style.display = 'block';
+    infoDiv.style.backgroundColor = '#fee';
+    todolistData = null;
+    addLog('解析iCalendar文件失败: ' + error.message);
+  }
+}
+
+// 解析iCalendar日期时间格式 (YYYYMMDDTHHMMSSZ 或 YYYYMMDD)
+function parseIcalDateTime(dtstart) {
+  if (!dtstart) return 0;
+  
+  // 移除时区标识和T分隔符前的参数
+  let clean = dtstart;
+  if (clean.includes(':')) {
+    clean = clean.split(':')[1]; // 取冒号后的值
+  }
+  clean = clean.replace(/Z$/, '').replace(/[+-]\d{4}$/, ''); // 移除时区
+  
+  if (clean.length === 8) {
+    // 日期格式 YYYYMMDD
+    const year = parseInt(clean.substring(0, 4));
+    const month = parseInt(clean.substring(4, 6)) - 1;
+    const day = parseInt(clean.substring(6, 8));
+    const date = new Date(year, month, day);
+    return Math.floor(date.getTime() / 1000);
+  } else if (clean.length >= 15) {
+    // 日期时间格式 YYYYMMDDTHHMMSS
+    const year = parseInt(clean.substring(0, 4));
+    const month = parseInt(clean.substring(4, 6)) - 1;
+    const day = parseInt(clean.substring(6, 8));
+    const hour = parseInt(clean.substring(9, 11)) || 0;
+    const minute = parseInt(clean.substring(11, 13)) || 0;
+    const second = parseInt(clean.substring(13, 15)) || 0;
+    const date = new Date(year, month, day, hour, minute, second);
+    return Math.floor(date.getTime() / 1000);
+  }
+  
+  return 0;
+}
+
+// 转义iCalendar值
+function escapeIcalValue(value) {
+  return value.replace(/\\/g, '\\\\')
+              .replace(/;/g, '\\;')
+              .replace(/,/g, '\\,')
+              .replace(/\n/g, '\\n');
+}
+
+// 反转义iCalendar值
+function unescapeIcalValue(value) {
+  return value.replace(/\\n/g, '\n')
+              .replace(/\\,/g, ',')
+              .replace(/\\;/g, ';')
+              .replace(/\\\\/g, '\\');
+}
+
+async function sendTodolist() {
+  if (!todolistData) {
+    addLog("请先选择并解析iCalendar文件！");
+    return;
+  }
+
+  // 将文本转换为UTF-8字节数组
+  const encoder = new TextEncoder();
+  const icalData = encoder.encode(todolistData);
+
+  // 检查数据长度，BLE MTU限制
+  const mtuSize = parseInt(document.getElementById('mtusize').value);
+  const maxChunkSize = mtuSize - 3; // 减去命令字节和可能的开销
+
+  if (icalData.length > maxChunkSize) {
+    addLog(`警告：待办事项数据较大 (${icalData.length}字节)，超过MTU限制 (${maxChunkSize}字节)`);
+    addLog(`建议：减少待办事项数量或使用MTU≥247的设备`);
+    if (!confirm(`数据大小 ${icalData.length} 字节超过MTU限制 ${maxChunkSize} 字节，是否继续尝试发送？\n（可能会失败或只发送部分数据）`)) {
+      return;
+    }
+  }
+
+  // 发送数据（BLE协议栈会自动处理分片）
+  if (await write(EpdCmd.SET_TODOLIST, icalData)) {
+    addLog(`待办事项已发送！(${icalData.length}字节)`);
+    addLog("屏幕刷新完成前请不要操作。");
+  } else {
+    addLog("发送失败！请检查蓝牙连接。");
   }
 }
 
@@ -309,6 +535,7 @@ function updateButtonStatus(forceDisabled = false) {
   document.getElementById("clearscreenbutton").disabled = status;
   document.getElementById("sendimgbutton").disabled = status;
   document.getElementById("setDriverbutton").disabled = status;
+  document.getElementById("sendTodolistbutton").disabled = status;
 }
 
 function disconnect() {

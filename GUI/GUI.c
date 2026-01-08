@@ -1,16 +1,37 @@
 #include "GUI.h"
 
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 
+#include "../EPD/todolist.h"
 #include "Lunar.h"
 #include "fonts.h"
+
+// 条件编译：只在 Nordic SDK 环境下包含 nordic_common.h
+// 检测 Nordic SDK 环境（通过 SOFTDEVICE_PRESENT 或 NRF 系列宏）
+#if defined(SOFTDEVICE_PRESENT) || defined(NRF51) || defined(NRF52) || \
+    defined(NRF52811_XXAA) || defined(NRF52832_XXAA) || defined(NRF52840_XXAA)
+#include "nordic_common.h"
+#else
+// 非 Nordic 环境（如 win32），提供 MIN/MAX 宏定义
+#ifndef MIN
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#endif
+#ifndef MAX
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#endif
+#endif
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 #define GFX_printf_styled(gfx, fg, bg, font, ...) \
     GFX_setTextColor(gfx, fg, bg);                \
     GFX_setFont(gfx, font);                       \
     GFX_printf(gfx, __VA_ARGS__);
+
+#define CALENDAR_BORDER_WIDTH 4      // 边框宽度（4px）
+#define CALENDAR_PADDING 8           // 日历区域内边距（8px，4的倍数）
+#define TODOLIST_PADDING 8           // 待办列表区域内边距（8px，4的倍数）
 
 // height to use larger layout
 #define large_layout(data) ((data)->height >= 400)
@@ -298,11 +319,192 @@ static void DrawMonthDays(Adafruit_GFX* gfx, int16_t x, int16_t y, tm_t* tm, str
     }
 }
 
+// 过滤当日事项并按开始时间排序
+static uint8_t todolist_filter_today(todolist_t* todolist, todo_item_t* today_items, uint32_t current_timestamp) {
+    if (todolist == NULL || today_items == NULL) {
+        return 0;
+    }
+
+    tm_t current_tm;
+    transformTime(current_timestamp, &current_tm);
+    uint16_t current_year = current_tm.tm_year + YEAR0;
+    uint8_t current_month = current_tm.tm_mon + 1;
+    uint8_t current_day = current_tm.tm_mday;
+
+    uint8_t today_count = 0;
+
+    // 过滤当日事项
+    for (uint8_t i = 0; i < todolist->count && today_count < TODO_MAX_ITEMS; i++) {
+        todo_item_t* item = &todolist->items[i];
+
+        // 检查开始时间是否为当天
+        if (item->start_timestamp > 0) {
+            tm_t start_tm;
+            transformTime(item->start_timestamp, &start_tm);
+            uint16_t start_year = start_tm.tm_year + YEAR0;
+            uint8_t start_month = start_tm.tm_mon + 1;
+            uint8_t start_day = start_tm.tm_mday;
+
+            // 只保留当天的任务
+            if (start_year == current_year && start_month == current_month && start_day == current_day) {
+                memcpy(&today_items[today_count], item, sizeof(todo_item_t));
+                today_count++;
+            }
+        }
+    }
+
+    // 按开始时间排序（冒泡排序）
+    for (uint8_t i = 0; i < today_count - 1; i++) {
+        for (uint8_t j = 0; j < today_count - 1 - i; j++) {
+            if (today_items[j].start_timestamp > today_items[j + 1].start_timestamp) {
+                todo_item_t temp = today_items[j];
+                today_items[j] = today_items[j + 1];
+                today_items[j + 1] = temp;
+            }
+        }
+    }
+
+    return today_count;
+}
+
+// 绘制待办事项列表
+static void DrawTodoList(Adafruit_GFX* gfx, int16_t x, gui_data_t* data) {
+    if (data->todolist == NULL) {
+        return;
+    }
+
+    // 过滤当日事项并按开始时间排序
+    todo_item_t today_items[TODO_MAX_ITEMS];
+    uint8_t today_count = todolist_filter_today(data->todolist, today_items, data->timestamp);
+
+    // 绘制标题
+    GFX_setFont(gfx, u8g2_font_wqy12_t_lunar);
+    GFX_setTextColor(gfx, GFX_BLACK, GFX_WHITE);
+    GFX_setCursor(gfx, x, 20);
+    GFX_printf(gfx, "今日待办");
+
+    if (today_count == 0) {
+        // 显示空状态提示
+        GFX_setFont(gfx, u8g2_font_wqy9_t_lunar);
+        GFX_setCursor(gfx, x, data->height / 2);
+        GFX_printf(gfx, "今日无待办");
+        return;
+    }
+
+    // 计算可用显示区域（标题区域 + 内容区域）
+    int16_t title_height = 30;
+    int16_t available_height = data->height - title_height - TODOLIST_PADDING;
+
+    // 计算每项高度（动态计算，不限制最大项数）
+    // 如果事项过多，丢弃最早的事项（已按时间排序，丢弃前面的）
+    int16_t min_item_height = 24;  // 最小项高度
+    uint8_t max_display_items = available_height / min_item_height;
+
+    uint8_t display_count = MIN(today_count, max_display_items);
+    uint8_t start_index = 0;
+    if (display_count < today_count) {
+        // 丢弃最早的事项（数组前面的项）
+        start_index = today_count - display_count;
+    }
+
+    int16_t item_height = available_height / display_count;
+    int16_t y = title_height + TODOLIST_PADDING;
+
+    // 绘制待办事项
+    for (uint8_t i = 0; i < display_count; i++) {
+        todo_item_t* item = &today_items[start_index + i];
+
+        // 设置颜色
+        if (item->status == TODO_STATUS_COMPLETED) {
+            GFX_setTextColor(gfx, GFX_BLACK, GFX_WHITE);  // 已完成：黑色（可考虑使用更浅的灰色）
+        } else {
+            GFX_setTextColor(gfx, GFX_BLACK, GFX_WHITE);  // 未完成：黑色
+        }
+
+        // 绘制复选框（简化：用方框表示）
+        GFX_drawRect(gfx, x, y, 10, 10, GFX_BLACK);
+        if (item->status == TODO_STATUS_COMPLETED) {
+            // 绘制勾选标记
+            GFX_drawLine(gfx, x + 2, y + 5, x + 4, y + 7, GFX_BLACK);
+            GFX_drawLine(gfx, x + 4, y + 7, x + 8, y + 3, GFX_BLACK);
+        }
+
+        // 绘制开始时间（使用更小的字体以区分）
+        int16_t content_x = x + 12;  // 复选框右侧的起始位置
+        int16_t content_y = y + 2;   // 内容起始Y坐标
+
+        if (item->start_timestamp > 0) {
+            tm_t start_tm;
+            transformTime(item->start_timestamp, &start_tm);
+            // 使用更小的字体（wqy9比wqy12小）显示时间
+            GFX_setFont(gfx, u8g2_font_wqy9_t_lunar);
+            GFX_setCursor(gfx, content_x, content_y);
+            GFX_printf(gfx, "%02d:%02d", start_tm.tm_hour, start_tm.tm_min);
+
+            // 计算摘要文本的Y坐标（时间下方）
+            int16_t time_font_height = GFX_getFontHeight(gfx);
+            content_y += time_font_height + 2;  // 时间字体高度 + 2px间距
+        }
+
+        // 绘制文本（摘要）- 使用正常字体
+        GFX_setFont(gfx, u8g2_font_wqy12_t_lunar);  // 使用正常大小的字体
+        GFX_setCursor(gfx, content_x, content_y);
+
+        // 截断过长的文本
+        char display_text[TODO_MAX_SUMMARY_LEN + 1];
+        int16_t max_width = data->width - content_x - CALENDAR_PADDING;
+        strncpy(display_text, item->summary, sizeof(display_text) - 1);
+        display_text[sizeof(display_text) - 1] = '\0';
+
+        // 如果文本过长，截断并添加省略号
+        int16_t text_width = GFX_getUTF8Width(gfx, display_text);
+        if (text_width > max_width) {
+            // 简化处理：直接截断（可优化为智能截断）
+            uint8_t max_chars = max_width / (GFX_getUTF8Width(gfx, "A"));
+            if (max_chars > 3 && max_chars < strlen(display_text)) {
+                display_text[max_chars - 3] = '\0';
+                strcat(display_text, "...");
+            }
+        }
+
+        GFX_printf(gfx, "%s", display_text);
+
+        y += item_height;
+    }
+}
+
 static void DrawCalendar(Adafruit_GFX* gfx, tm_t* tm, struct Lunar_Date* Lunar, gui_data_t* data) {
+    // 保存原始宽度
+    int16_t original_width = data->width;
+
+    // 计算日历区域宽度（60%）
+    int16_t calendar_width = (int16_t)(data->width * 0.6f);
+    int16_t calendar_x = CALENDAR_PADDING;
+
+    // 临时修改宽度为60%，这样DrawWeekHeader和DrawMonthDays会自动适应新的宽度
+    // 每行7天的列宽会自动计算为: (calendar_width - 2 * calendar_x) / 7
+    data->width = calendar_width;
+
     bool large = large_layout(data);
-    DrawDateHeader(gfx, 10, large ? 38 : 28, tm, Lunar, data);
-    DrawWeekHeader(gfx, 10, large ? 44 : 32, data);
-    DrawMonthDays(gfx, 10, large ? 84 : 64, tm, Lunar, data);
+    // DrawDateHeader中的电池和SSID定位会使用calendar_width，这是正确的
+    // 因为它们应该在日历区域的右侧
+    DrawDateHeader(gfx, calendar_x, large ? 38 : 28, tm, Lunar, data);
+    // DrawWeekHeader会自动计算: (calendar_width - 2 * calendar_x) / 7
+    DrawWeekHeader(gfx, calendar_x, large ? 44 : 32, data);
+    // DrawMonthDays会自动计算: (calendar_width - calendar_x - 10) / 7
+    DrawMonthDays(gfx, calendar_x, large ? 84 : 64, tm, Lunar, data);
+
+    // 恢复原始宽度
+    data->width = original_width;
+
+    // 计算分隔位置
+    int16_t separator_x = calendar_x + calendar_width;
+
+    // 绘制边框（4px宽度的竖线，使用矩形填充更清晰）
+    GFX_fillRect(gfx, separator_x, 0, CALENDAR_BORDER_WIDTH, data->height, GFX_BLACK);
+
+    // 绘制待办事项列表（边框后留4px间距）
+    DrawTodoList(gfx, separator_x + CALENDAR_BORDER_WIDTH + 4, data);
 }
 
 // clang-format off

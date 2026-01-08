@@ -33,6 +33,7 @@
 #include "softdevice_handler.h"
 #endif
 #include "EPD_service.h"
+#include "EPD/todolist.h"
 #include "app_error.h"
 #include "app_scheduler.h"
 #include "app_timer.h"
@@ -272,6 +273,9 @@ static void services_init(void) {
     // Initialize EPD Service.
     memset(&m_epd, 0, sizeof(ble_epd_t));
     APP_ERROR_CHECK(ble_epd_init(&m_epd));
+
+    // Initialize todolist module (FDS is already initialized in epd_config_init)
+    todolist_init();
 
 #if defined(S112)
     ble_dfu_buttonless_init_t dfus_init = {0};

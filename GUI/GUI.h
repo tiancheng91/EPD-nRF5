@@ -2,6 +2,7 @@
 #define __GUI_H
 
 #include "Adafruit_GFX.h"
+#include "../EPD/todolist.h"
 
 typedef enum {
     MODE_PICTURE = 0,
@@ -19,6 +20,7 @@ typedef struct {
     int8_t temperature;
     uint16_t voltage;
     char ssid[20];
+    todolist_t* todolist;  // 待办事项列表指针
 } gui_data_t;
 
 void DrawGUI(gui_data_t* data, buffer_callback callback, void* callback_data);

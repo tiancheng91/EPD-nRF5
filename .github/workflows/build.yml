@@ -1,7 +1,7 @@
 name: Build
 
 on:
-  push:
+  push:  # 任何 push 都触发构建（包括普通 push 和 tag push）
   workflow_dispatch:
 
 jobs:
@@ -68,3 +68,68 @@ jobs:
         with:
           name: emulator
           path: emulator.exe
+
+  create-release:
+    needs: [nrf51, nrf52, win32]
+    runs-on: ubuntu-latest
+    # 仅在推送符合 semver 格式的 tag 时创建 release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate tag format
+        id: validate_tag
+        run: |
+          TAG="${{ github.ref_name }}"
+          # 验证标签是否符合 semver 格式 (v1.0.0, v1.0.0-beta.1, v1.0.0+build.1)
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?(\+[a-zA-Z0-9.-]+)?$ ]]; then
+            echo "Tag format is valid: $TAG"
+            echo "is_valid=true" >> $GITHUB_OUTPUT
+            echo "version=${TAG#v}" >> $GITHUB_OUTPUT
+          else
+            echo "Tag format is invalid: $TAG (expected semver format like v1.0.0)"
+            echo "is_valid=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body: |
+            ## Release ${{ github.ref_name }}
+            
+            ### 构建产物
+            
+            - **nRF51822**: nRF51 系列固件
+            - **nRF52811**: nRF52 系列固件  
+            - **emulator**: Windows 模拟器
+            
+            ### 文件列表
+            
+            - `nrf51822_xxaa.hex` - nRF51822 应用固件
+            - `s130_nrf51_2.0.1_softdevice.hex` - S130 SoftDevice
+            - `nrf52811_xxaa.hex` - nRF52811 应用固件
+            - `s112_nrf52_7.2.0_softdevice.hex` - S112 SoftDevice
+            - `emulator.exe` - Windows 模拟器
+            
+            ---
+            
+            *自动生成于 ${{ github.event.head_commit.timestamp || github.run_started_at }}*
+          files: |
+            artifacts/**/*
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

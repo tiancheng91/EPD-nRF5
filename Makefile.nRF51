@@ -46,6 +46,8 @@ SRC_FILES += \
   $(PROJ_DIR)/EPD/EPD_service.c \
   $(PROJ_DIR)/EPD/UC81xx.c \
   $(PROJ_DIR)/EPD/SSD16xx.c \
+  $(PROJ_DIR)/EPD/todolist.c \
+  $(PROJ_DIR)/EPD/icalendar.c \
   $(PROJ_DIR)/GUI/GUI.c \
   $(PROJ_DIR)/GUI/Lunar.c \
   $(PROJ_DIR)/GUI/fonts.c \

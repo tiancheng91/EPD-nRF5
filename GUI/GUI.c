@@ -7,7 +7,21 @@
 #include "../EPD/todolist.h"
 #include "Lunar.h"
 #include "fonts.h"
+
+// 条件编译：只在 Nordic SDK 环境下包含 nordic_common.h
+// 检测 Nordic SDK 环境（通过 SOFTDEVICE_PRESENT 或 NRF 系列宏）
+#if defined(SOFTDEVICE_PRESENT) || defined(NRF51) || defined(NRF52) || \
+    defined(NRF52811_XXAA) || defined(NRF52832_XXAA) || defined(NRF52840_XXAA)
 #include "nordic_common.h"
+#else
+// 非 Nordic 环境（如 win32），提供 MIN/MAX 宏定义
+#ifndef MIN
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#endif
+#ifndef MAX
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#endif
+#endif
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 #define GFX_printf_styled(gfx, fg, bg, font, ...) \

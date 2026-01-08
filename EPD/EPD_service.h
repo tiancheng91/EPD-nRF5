@@ -71,6 +71,7 @@ enum EPD_CMDS {
 
     EPD_CMD_SET_TIME = 0x20,       /** < set time with unix timestamp */
     EPD_CMD_SET_WEEK_START = 0x21, /** < set week start day (0: Sunday, 1: Monday, ...) */
+    EPD_CMD_SET_TODOLIST = 0x22,   /** < set todolist with iCalendar format */
 
     EPD_CMD_WRITE_IMAGE = 0x30, /** < write image data to EPD ram */
 

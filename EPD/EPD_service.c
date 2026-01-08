@@ -16,12 +16,14 @@
 
 #include "app_scheduler.h"
 #include "ble_srv_common.h"
+#include "icalendar.h"
 #include "main.h"
 #include "nrf_delay.h"
 #include "nrf_gpio.h"
 #include "nrf_log.h"
 #include "nrf_pwr_mgmt.h"
 #include "sdk_macros.h"
+#include "todolist.h"
 
 #if defined(S112)
 #define EPD_CFG_52811 {0x14, 0x13, 0x06, 0x05, 0x04, 0x03, 0x02, 0x02, 0xFF, 0x12, 0x07}
@@ -37,6 +39,11 @@ static void epd_gui_update(void* p_event_data, uint16_t event_size) {
 
     EPD_GPIO_Init();
     epd_model_t* epd = epd_init((epd_model_id_t)p_epd->config.model_id);
+
+    // 读取待办事项列表
+    static todolist_t todolist;
+    todolist_read(&todolist);
+
     gui_data_t data = {
         .mode = (display_mode_t)p_epd->config.display_mode,
         .color = epd->color,
@@ -46,6 +53,7 @@ static void epd_gui_update(void* p_event_data, uint16_t event_size) {
         .week_start = p_epd->config.week_start,
         .temperature = epd->drv->read_temp(epd),
         .voltage = EPD_ReadVoltage(),
+        .todolist = &todolist,
     };
 
     uint16_t dev_name_len = sizeof(data.ssid);
@@ -178,6 +186,22 @@ static void epd_service_on_write(ble_epd_t* p_epd, uint8_t* p_data, uint16_t len
                 epd_config_write(&p_epd->config);
             }
             break;
+
+        case EPD_CMD_SET_TODOLIST: {
+            // p_data[1..length-1] 包含 iCalendar 格式的字符串
+            if (length < 2) return;
+
+            // 解析并存储待办事项
+            uint8_t* ical_data = &p_data[1];
+            uint16_t ical_len = length - 1;
+
+            if (todolist_parse_icalendar(ical_data, ical_len) == NRF_SUCCESS) {
+                // 解析成功，触发GUI更新
+                epd_update_display_mode(p_epd, MODE_CALENDAR);
+                ble_epd_on_timer(p_epd, timestamp(), true);
+            }
+            break;
+        }
 
         case EPD_CMD_WRITE_IMAGE:  // MSB=0000: ram begin, LSB=1111: black
             if (length < 3) return;

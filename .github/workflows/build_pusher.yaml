@@ -121,7 +121,7 @@ jobs:
           body: |
             ## Pusher Release ${{ steps.version.outputs.version }}
             
-            Pusher 二进制文件发布
+            Pusher 二进制文件发布，用于定时推送同步日程事项到墨水屏设备
             
             ### 下载
             

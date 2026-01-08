@@ -3,8 +3,14 @@
 
 #include <stdint.h>
 
+// NRF51 内存较小，使用更小的配置
+#ifdef NRF51
+#define TODO_MAX_SUMMARY_LEN 32    // 摘要最大长度（NRF51 使用较小值）
+#define TODO_MAX_ITEMS 10           // 最大待办事项数量（NRF51 使用较小值）
+#else
 #define TODO_MAX_SUMMARY_LEN 64    // 摘要最大长度
 #define TODO_MAX_ITEMS 20           // 最大待办事项数量
+#endif
 
 typedef enum {
     TODO_STATUS_NEEDS_ACTION = 0,  // 待处理

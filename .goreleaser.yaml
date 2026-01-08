@@ -1,6 +1,8 @@
 # GoReleaser 配置文件
 # 用于构建 pusher 二进制包
 
+version: 2
+
 project_name: pusher
 
 builds:
@@ -35,7 +37,12 @@ checksum:
 # 发布到 GitHub Releases
 release:
   mode: replace
+  # 自动创建 GitHub Release
   # 仅在推送 tag 时发布
+  header: |
+    ## Pusher Release {{ .Tag }}
+    
+    Pusher 二进制文件发布
 
 # 可选：生成 changelog
 changelog:

@@ -3,7 +3,7 @@ name: Build Pusher
 on:
   push:
     tags:
-      - "pusher-v*"
+      - "pusher-v*"  # 带应用前缀的 semver 标签格式，如 pusher-v1.0.0
   pull_request:
     paths:
       - "pusher/**"
@@ -34,12 +34,32 @@ jobs:
       # Linux 二进制可以在 Ubuntu runner 上构建
       # Windows 二进制可能需要额外的工具链
       
+      - name: Prepare semver tag for GoReleaser
+        run: |
+          TAG="${{ github.ref_name }}"
+          # 从 pusher-v1.0.0 中提取版本号，创建符合 semver 的标签 v1.0.0
+          if [[ "$TAG" =~ ^pusher-v(.+)$ ]]; then
+            VERSION="${BASH_REMATCH[1]}"
+            SEMVER_TAG="v${VERSION}"
+            echo "Original tag: $TAG"
+            echo "Extracted version: $VERSION"
+            echo "Creating semver tag: $SEMVER_TAG"
+            # 创建临时本地标签供 GoReleaser 使用（指向当前 commit）
+            git tag -f "$SEMVER_TAG" "${{ github.sha }}"
+            echo "SEMVER_TAG=$SEMVER_TAG" >> $GITHUB_ENV
+          else
+            echo "Tag format not recognized: $TAG (expected pusher-v* format)"
+            exit 1
+          fi
+        if: github.event_name != 'pull_request'
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
           version: "~> v2"
-          args: release --clean
+          # 使用提取的 semver 标签
+          args: release --clean --tag ${{ env.SEMVER_TAG }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         # 仅在 push tags 时发布，PR 时只构建不发布

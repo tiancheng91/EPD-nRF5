@@ -29,6 +29,8 @@ typedef struct {
     char ssid[20];
     calendar_display_mode_t calendar_mode; /**< Calendar display mode */
     char todo_string[64];                  /**< Todo items string (format: "item1\nitem2\n...", max 60 chars including \n) */
+    char location_string[64];              /**< Location string (plain text, max 60 chars) */
+    char weather_string[64];               /**< Weather info string (format: "temp,weather,humidity,wind_dir,wind_desc", max 60 chars) */
 } gui_data_t;
 
 void DrawGUI(gui_data_t* data, buffer_callback callback, void* callback_data);

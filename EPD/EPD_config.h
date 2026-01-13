@@ -19,6 +19,8 @@ typedef struct {
     uint8_t week_start;
     uint8_t calendar_mode;      /**< Calendar display mode (0: full, 1: simple+todo) */
     char todo_string[64];       /**< Todo items string (format: "item1; item2; ...", max 60 chars) */
+    char location_string[64];   /**< Location string (plain text, max 60 chars) */
+    char weather_string[64];    /**< Weather info string (format: "temp,weather,humidity,wind_dir,wind_desc", max 60 chars) */
 } epd_config_t;
 
 #define EPD_CONFIG_SIZE (sizeof(epd_config_t) / sizeof(uint8_t))

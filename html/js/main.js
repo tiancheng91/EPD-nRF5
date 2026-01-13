@@ -18,6 +18,8 @@ const EpdCmd = {
   WRITE_IMG: 0x30, // v1.6
 
   SET_TODO: 0x40, // 待办事项
+  SET_LOCATION: 0x41, // 地址位置
+  SET_WEATHER: 0x42, // 天气信息
 
   SET_CONFIG: 0x90,
   SYS_RESET: 0x91,
@@ -235,6 +237,116 @@ async function syncTodo() {
     addLog(`待办事项已同步！长度: ${stringLen} 字符`);
     addLog(`内容: ${todoString.replace(/\n/g, '\\n')}`);
   }
+}
+
+async function setLocation() {
+  if (!epdCharacteristic) {
+    addLog("服务不可用，请检查蓝牙连接");
+    return;
+  }
+
+  const input = document.getElementById('locationInput');
+  if (!input) {
+    addLog("找不到地址位置输入框");
+    return;
+  }
+
+  let locationString = input.value.trim();
+  
+  if (locationString.length === 0) {
+    addLog("地址位置不能为空");
+    return;
+  }
+
+  // 转换为UTF-8编码的字节数组
+  const encoder = new TextEncoder();
+  const locationBytes = encoder.encode(locationString);
+  const stringLen = locationBytes.length;
+
+  if (stringLen === 0) {
+    addLog("地址位置字符串为空");
+    return;
+  }
+
+  if (stringLen > 60) {
+    addLog("错误：地址位置字符串长度超过60个字符");
+    return;
+  }
+
+  // 构建命令数据：[0x41] [string_len] [location_string...]
+  const data = new Uint8Array([stringLen, ...locationBytes]);
+
+  if (await write(EpdCmd.SET_LOCATION, data)) {
+    addLog(`地址位置已设置！长度: ${stringLen} 字符`);
+    addLog(`内容: ${locationString}`);
+  }
+}
+
+async function setWeather() {
+  if (!epdCharacteristic) {
+    addLog("服务不可用，请检查蓝牙连接");
+    return;
+  }
+
+  const input = document.getElementById('weatherInput');
+  if (!input) {
+    addLog("找不到天气信息输入框");
+    return;
+  }
+
+  let weatherString = input.value.trim();
+  
+  if (weatherString.length === 0) {
+    addLog("天气信息不能为空");
+    return;
+  }
+
+  // 转换为UTF-8编码的字节数组
+  const encoder = new TextEncoder();
+  const weatherBytes = encoder.encode(weatherString);
+  const stringLen = weatherBytes.length;
+
+  if (stringLen === 0) {
+    addLog("天气信息字符串为空");
+    return;
+  }
+
+  if (stringLen > 60) {
+    addLog("错误：天气信息字符串长度超过60个字符");
+    return;
+  }
+
+  // 构建命令数据：[0x42] [string_len] [weather_string...]
+  const data = new Uint8Array([stringLen, ...weatherBytes]);
+
+  if (await write(EpdCmd.SET_WEATHER, data)) {
+    addLog(`天气信息已设置！长度: ${stringLen} 字符`);
+    addLog(`内容: ${weatherString}`);
+  }
+}
+
+function updateLocationCharCount() {
+  const input = document.getElementById('locationInput');
+  const charCount = document.getElementById('locationCharCount');
+  if (!input || !charCount) return;
+  
+  const encoder = new TextEncoder();
+  const bytes = encoder.encode(input.value);
+  const count = bytes.length;
+  charCount.textContent = `${count} / 60 字符`;
+  charCount.style.color = count > 60 ? '#dc3545' : '#666';
+}
+
+function updateWeatherCharCount() {
+  const input = document.getElementById('weatherInput');
+  const charCount = document.getElementById('weatherCharCount');
+  if (!input || !charCount) return;
+  
+  const encoder = new TextEncoder();
+  const bytes = encoder.encode(input.value);
+  const count = bytes.length;
+  charCount.textContent = `${count} / 60 字符`;
+  charCount.style.color = count > 60 ? '#dc3545' : '#666';
 }
 
 function updateTodoCharCount() {
@@ -465,6 +577,24 @@ async function reConnect() {
   setTimeout(async function () { await connect(); }, 300);
 }
 
+function extractStringFromConfig(data, offset, maxLen) {
+  if (data.length < offset + maxLen) return '';
+  
+  // Find null terminator
+  let len = 0;
+  for (let i = 0; i < maxLen; i++) {
+    if (data[offset + i] === 0) break;
+    len++;
+  }
+  
+  if (len === 0) return '';
+  
+  // Extract string bytes
+  const stringBytes = data.slice(offset, offset + len);
+  const decoder = new TextDecoder('utf-8');
+  return decoder.decode(stringBytes);
+}
+
 function handleNotify(value, idx) {
   const data = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
   if (idx == 0) {
@@ -482,6 +612,38 @@ function handleNotify(value, idx) {
       const calendarModeSelect = document.getElementById("calendarDisplayMode");
       if (calendarModeSelect) {
         calendarModeSelect.value = calendarMode.toString();
+      }
+    }
+    
+    // 更新待办事项、地址位置和天气信息（从配置中读取）
+    // todo_string offset: 14 (after calendar_mode)
+    // location_string offset: 78 (after todo_string[64])
+    // weather_string offset: 142 (after location_string[64])
+    if (data.length > 78) {
+      // 更新待办事项
+      const todoString = extractStringFromConfig(data, 14, 64);
+      const todoTextarea = document.getElementById('todoTextarea');
+      if (todoTextarea && todoString) {
+        todoTextarea.value = todoString;
+        updateTodoCharCount();
+      }
+      
+      // 更新地址位置
+      const locationString = extractStringFromConfig(data, 78, 64);
+      const locationInput = document.getElementById('locationInput');
+      if (locationInput && locationString) {
+        locationInput.value = locationString;
+        updateLocationCharCount();
+      }
+      
+      // 更新天气信息
+      if (data.length > 142) {
+        const weatherString = extractStringFromConfig(data, 142, 64);
+        const weatherInput = document.getElementById('weatherInput');
+        if (weatherInput && weatherString) {
+          weatherInput.value = weatherString;
+          updateWeatherCharCount();
+        }
       }
     }
     
@@ -769,5 +931,17 @@ document.body.onload = () => {
   if (todoTextarea) {
     todoTextarea.addEventListener('input', updateTodoCharCount);
     updateTodoCharCount();
+    
+    const locationInput = document.getElementById('locationInput');
+    if (locationInput) {
+      locationInput.addEventListener('input', updateLocationCharCount);
+      updateLocationCharCount();
+    }
+    
+    const weatherInput = document.getElementById('weatherInput');
+    if (weatherInput) {
+      weatherInput.addEventListener('input', updateWeatherCharCount);
+      updateWeatherCharCount();
+    }
   }
 }

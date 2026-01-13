@@ -50,6 +50,8 @@ static void epd_gui_update(void* p_event_data, uint16_t event_size) {
         .calendar_mode = (calendar_display_mode_t)p_epd->config.calendar_mode,
     };
     memcpy(data.todo_string, p_epd->config.todo_string, sizeof(data.todo_string));
+    memcpy(data.location_string, p_epd->config.location_string, sizeof(data.location_string));
+    memcpy(data.weather_string, p_epd->config.weather_string, sizeof(data.weather_string));
 
     uint16_t dev_name_len = sizeof(data.ssid);
     uint32_t err_code = sd_ble_gap_device_name_get((uint8_t*)data.ssid, &dev_name_len);
@@ -237,6 +239,76 @@ static void epd_service_on_write(ble_epd_t* p_epd, uint8_t* p_data, uint16_t len
 
             // Trigger display update if in calendar mode (full or todo)
             if (p_epd->config.display_mode == MODE_CALENDAR || p_epd->config.display_mode == MODE_CALENDAR_TODO) {
+                ble_epd_on_timer(p_epd, timestamp(), true);
+            }
+        } break;
+
+        case EPD_CMD_SET_LOCATION: {
+            if (length < 2) {
+                NRF_LOG_ERROR("[EPD]: SET_LOCATION command too short\n");
+                return;
+            }
+
+            uint8_t string_len = p_data[1];
+            if (string_len > 60) {
+                NRF_LOG_WARNING("[EPD]: Location string too long (%d), truncating to 60\n", string_len);
+                string_len = 60;
+            }
+
+            if (length < 2 + string_len) {
+                NRF_LOG_ERROR("[EPD]: SET_LOCATION command incomplete, expected %d bytes, got %d\n", 2 + string_len, length);
+                return;
+            }
+
+            // Clear location string
+            memset(p_epd->config.location_string, 0, sizeof(p_epd->config.location_string));
+            // Copy location string (max 60 chars + null terminator)
+            memcpy(p_epd->config.location_string, &p_data[2], string_len);
+            p_epd->config.location_string[string_len] = '\0';  // Ensure null termination
+
+            // Save to Flash
+            epd_config_write(&p_epd->config);
+
+            NRF_LOG_DEBUG("[EPD]: Location string saved: %s\n", (uint32_t)p_epd->config.location_string);
+
+            // Trigger partial refresh if in MODE_CALENDAR_TODO mode
+            if (p_epd->config.display_mode == MODE_CALENDAR_TODO) {
+                // TODO: Implement partial refresh for location area (bottom region)
+                ble_epd_on_timer(p_epd, timestamp(), true);
+            }
+        } break;
+
+        case EPD_CMD_SET_WEATHER: {
+            if (length < 2) {
+                NRF_LOG_ERROR("[EPD]: SET_WEATHER command too short\n");
+                return;
+            }
+
+            uint8_t string_len = p_data[1];
+            if (string_len > 60) {
+                NRF_LOG_WARNING("[EPD]: Weather string too long (%d), truncating to 60\n", string_len);
+                string_len = 60;
+            }
+
+            if (length < 2 + string_len) {
+                NRF_LOG_ERROR("[EPD]: SET_WEATHER command incomplete, expected %d bytes, got %d\n", 2 + string_len, length);
+                return;
+            }
+
+            // Clear weather string
+            memset(p_epd->config.weather_string, 0, sizeof(p_epd->config.weather_string));
+            // Copy weather string (max 60 chars + null terminator)
+            memcpy(p_epd->config.weather_string, &p_data[2], string_len);
+            p_epd->config.weather_string[string_len] = '\0';  // Ensure null termination
+
+            // Save to Flash
+            epd_config_write(&p_epd->config);
+
+            NRF_LOG_DEBUG("[EPD]: Weather string saved: %s\n", (uint32_t)p_epd->config.weather_string);
+
+            // Trigger partial refresh if in MODE_CALENDAR_TODO mode
+            if (p_epd->config.display_mode == MODE_CALENDAR_TODO) {
+                // TODO: Implement partial refresh for weather area (today info region right side)
                 ble_epd_on_timer(p_epd, timestamp(), true);
             }
         } break;

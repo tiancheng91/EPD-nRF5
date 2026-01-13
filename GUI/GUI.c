@@ -299,9 +299,168 @@ static void DrawMonthDays(Adafruit_GFX* gfx, int16_t x, int16_t y, tm_t* tm, str
     }
 }
 
-// Draw simple calendar (left 50% area, only solar dates)
+// Draw status bar (top: battery voltage left, device ID right)
+static void DrawStatusBar(Adafruit_GFX* gfx, gui_data_t* data) {
+    int16_t y = 2;
+    int16_t bar_height = 20;
+    
+    // Draw bottom border
+    GFX_drawFastHLine(gfx, 0, bar_height, data->width, GFX_BLACK);
+    
+    GFX_setFont(gfx, u8g2_font_wqy9_t_lunar);
+    GFX_setTextColor(gfx, GFX_BLACK, GFX_WHITE);
+    
+    // Draw battery voltage (left)
+    int16_t batt_x = 5;
+    int16_t batt_y = y + GFX_getFontAscent(gfx);
+    GFX_setCursor(gfx, batt_x, batt_y);
+    GFX_printf(gfx, "%d.%dV", data->voltage / 1000, (data->voltage % 1000) / 100);
+    
+    // Draw device ID (right)
+    int16_t ssid_x = data->width - GFX_getUTF8Width(gfx, data->ssid) - 5;
+    GFX_setCursor(gfx, ssid_x, batt_y);
+    GFX_printf(gfx, "%s", data->ssid);
+}
+
+// Parse and draw weather info
+static void DrawWeatherInfo(Adafruit_GFX* gfx, int16_t x, int16_t y, gui_data_t* data) {
+    if (data->weather_string[0] == '\0') {
+        return;  // No weather info
+    }
+    
+    char weather_copy[64];
+    memcpy(weather_copy, data->weather_string, sizeof(weather_copy));
+    weather_copy[sizeof(weather_copy) - 1] = '\0';
+    
+    // Parse weather string: "temp,weather,humidity,wind_dir,wind_desc"
+    char* temp_str = strtok(weather_copy, ",");
+    char* weather_str = strtok(NULL, ",");
+    char* humidity_str = strtok(NULL, ",");
+    char* wind_dir_str = strtok(NULL, ",");
+    char* wind_desc_str = strtok(NULL, ",");
+    
+    if (!temp_str || !weather_str) {
+        return;  // Invalid format
+    }
+    
+    int16_t current_x = x;
+    
+    // Draw weather (large font, left)
+    GFX_setFont(gfx, u8g2_font_helvB18_tn);
+    GFX_setTextColor(gfx, GFX_BLACK, GFX_WHITE);
+    int16_t weather_width = GFX_getUTF8Width(gfx, weather_str);
+    GFX_setCursor(gfx, current_x, y + GFX_getFontAscent(gfx));
+    GFX_printf(gfx, "%s", weather_str);
+    current_x += weather_width + 10;
+    
+    // Draw temperature (large font, middle)
+    GFX_setFont(gfx, u8g2_font_helvB18_tn);
+    GFX_setTextColor(gfx, GFX_BLACK, GFX_WHITE);
+    char temp_display[16];
+    snprintf(temp_display, sizeof(temp_display), "%s°", temp_str);
+    int16_t temp_width = GFX_getUTF8Width(gfx, temp_display);
+    GFX_setCursor(gfx, current_x, y + GFX_getFontAscent(gfx));
+    GFX_printf(gfx, "%s", temp_display);
+    current_x += temp_width + 5;
+    
+    // Draw humidity and wind (small font, vertical layout, right)
+    if (humidity_str && wind_desc_str) {
+        GFX_setFont(gfx, u8g2_font_wqy9_t_lunar);
+        GFX_setTextColor(gfx, GFX_BLACK, GFX_WHITE);
+        
+        // Draw vertical line separator
+        GFX_drawFastVLine(gfx, current_x, y, GFX_getFontHeight(gfx) * 2, GFX_BLACK);
+        current_x += 3;
+        
+        // Draw humidity
+        char humidity_display[16];
+        snprintf(humidity_display, sizeof(humidity_display), "湿度 %s%%", humidity_str);
+        GFX_setCursor(gfx, current_x, y + GFX_getFontAscent(gfx));
+        GFX_printf(gfx, "%s", humidity_display);
+        
+        // Draw wind description
+        y += GFX_getFontHeight(gfx);
+        GFX_setCursor(gfx, current_x, y + GFX_getFontAscent(gfx));
+        GFX_printf(gfx, "%s", wind_desc_str ? wind_desc_str : "");
+    }
+}
+
+// Draw today info area (left: date info, right: weather)
+static void DrawTodayInfo(Adafruit_GFX* gfx, tm_t* tm, struct Lunar_Date* Lunar, gui_data_t* data) {
+    int16_t y = 25;  // Below status bar
+    int16_t info_height = 55;
+    int16_t left_x = 5;
+    int16_t right_x = (data->width * 65) / 100 + 5;  // Start after calendar area (65%)
+    int16_t right_width = data->width - right_x - 5;
+    
+    // Draw bottom border
+    GFX_drawFastHLine(gfx, 0, y + info_height, data->width, GFX_BLACK);
+    
+    // Left side: Date info
+    int16_t current_y = y + 5;
+    
+    // First line: Year/Month (red) + Lunar year
+    GFX_setFont(gfx, u8g2_font_wqy12_t_lunar);
+    GFX_setTextColor(gfx, GFX_RED, GFX_WHITE);
+    GFX_setCursor(gfx, left_x, current_y + GFX_getFontAscent(gfx));
+    GFX_printf(gfx, "%d年%d月", tm->tm_year + YEAR0, tm->tm_mon + 1);
+    
+    int16_t tx = gfx->tx;
+    GFX_setTextColor(gfx, GFX_BLACK, GFX_WHITE);
+    GFX_printf(gfx, " %s年[%s]", Lunar_StemStrig[LUNAR_GetStem(Lunar)], Lunar_ZodiacString[LUNAR_GetZodiac(Lunar)]);
+    
+    // Second line: Date (large) + Weekday + Lunar date (red)
+    current_y += GFX_getFontHeight(gfx) + 3;
+    GFX_setFont(gfx, u8g2_font_helvB24_tn);
+    GFX_setTextColor(gfx, GFX_BLACK, GFX_WHITE);
+    GFX_setCursor(gfx, left_x, current_y + GFX_getFontAscent(gfx));
+    GFX_printf(gfx, "%d", tm->tm_mday);
+    
+    tx = gfx->tx + 5;
+    GFX_setFont(gfx, u8g2_font_wqy12_t_lunar);
+    GFX_setTextColor(gfx, GFX_BLACK, GFX_WHITE);
+    GFX_setCursor(gfx, tx, current_y + GFX_getFontAscent(gfx));
+    GFX_printf(gfx, "星期%s", Lunar_DayString[tm->tm_wday]);
+    
+    current_y += GFX_getFontHeight(gfx) + 2;
+    GFX_setCursor(gfx, tx, current_y + GFX_getFontAscent(gfx));
+    GFX_setTextColor(gfx, GFX_RED, GFX_WHITE);
+    if (Lunar->IsLeap) GFX_printf(gfx, " ");
+    GFX_printf(gfx, "%s%s%s", Lunar_MonthLeapString[Lunar->IsLeap], Lunar_MonthString[Lunar->Month],
+               Lunar_DateString[Lunar->Date]);
+    
+    // Right side: Weather info
+    DrawWeatherInfo(gfx, right_x, y + 5, data);
+}
+
+// Draw footer (bottom: location left, air quality right)
+static void DrawFooter(Adafruit_GFX* gfx, gui_data_t* data) {
+    int16_t footer_height = 22;
+    int16_t y = data->height - footer_height;
+    
+    // Draw top border
+    GFX_drawFastHLine(gfx, 0, y, data->width, GFX_BLACK);
+    
+    GFX_setFont(gfx, u8g2_font_wqy12_t_lunar);
+    GFX_setTextColor(gfx, GFX_BLACK, GFX_WHITE);
+    
+    // Draw location (left)
+    int16_t location_y = y + (footer_height - GFX_getFontHeight(gfx)) / 2 + GFX_getFontAscent(gfx);
+    if (data->location_string[0] != '\0') {
+        GFX_setCursor(gfx, 5, location_y);
+        GFX_printf(gfx, "%s", data->location_string);
+    }
+    
+    // Draw air quality (right) - placeholder for now
+    const char* air_quality = "空气质量 良";
+    int16_t air_x = data->width - GFX_getUTF8Width(gfx, air_quality) - 5;
+    GFX_setCursor(gfx, air_x, location_y);
+    GFX_printf(gfx, "%s", air_quality);
+}
+
+// Draw simple calendar (left 65% area, only solar dates)
 static void DrawSimpleCalendar(Adafruit_GFX* gfx, tm_t* tm, gui_data_t* data) {
-    int16_t left_width = data->width / 2;
+    int16_t left_width = (data->width * 65) / 100;  // 65% width
     int16_t x = 5;
     int16_t y = 5;
 
@@ -356,38 +515,21 @@ static void DrawSimpleCalendar(Adafruit_GFX* gfx, tm_t* tm, gui_data_t* data) {
     }
 }
 
-// Draw today info (right top 1/3: weekday + lunar date)
-static void DrawTodayInfo(Adafruit_GFX* gfx, tm_t* tm, struct Lunar_Date* Lunar, gui_data_t* data) {
-    int16_t right_x = data->width / 2 + 5;
-    int16_t y = 5;
+// DrawTodayInfo is now defined above (before DrawSimpleCalendar)
 
-    GFX_setFont(gfx, u8g2_font_wqy12_t_lunar);
-    GFX_setTextColor(gfx, GFX_BLACK, GFX_WHITE);
-
-    // Draw weekday
-    GFX_setCursor(gfx, right_x, y + GFX_getFontAscent(gfx));
-    GFX_printf(gfx, "星期%s", Lunar_DayString[tm->tm_wday]);
-
-    // Draw lunar date
-    y += GFX_getFontHeight(gfx) + 5;
-    GFX_setCursor(gfx, right_x, y + GFX_getFontAscent(gfx));
-    if (Lunar->IsLeap) GFX_printf(gfx, " ");
-    GFX_printf(gfx, "%s%s%s", Lunar_MonthLeapString[Lunar->IsLeap], Lunar_MonthString[Lunar->Month],
-               Lunar_DateString[Lunar->Date]);
-}
-
-// Draw todo list (right bottom 2/3)
+// Draw todo list (right 35% area)
 static void DrawTodoList(Adafruit_GFX* gfx, gui_data_t* data) {
-    int16_t right_x = data->width / 2 + 5;
-    int16_t right_width = data->width / 2 - 10;
-    int16_t y = data->height / 3 + 5;
-    int16_t todo_height = (data->height * 2) / 3 - 10;
+    int16_t left_width = (data->width * 65) / 100;  // 65% width for calendar
+    int16_t right_x = left_width + 5;
+    int16_t right_width = data->width - left_width - 10;
+    int16_t y = 5;
+    int16_t todo_height = data->height - 10;
 
-    // Draw title "提醒事项"
+    // Draw title "待办事项" (red color)
     GFX_setFont(gfx, u8g2_font_wqy12_t_lunar);
-    GFX_setTextColor(gfx, GFX_BLACK, GFX_WHITE);
+    GFX_setTextColor(gfx, GFX_RED, GFX_WHITE);
     GFX_setCursor(gfx, right_x, y + GFX_getFontAscent(gfx));
-    GFX_printf(gfx, "提醒事项");
+    GFX_printf(gfx, "待办事项");
 
     // Move to content area below title
     y += GFX_getFontHeight(gfx) + 5;
@@ -397,7 +539,7 @@ static void DrawTodoList(Adafruit_GFX* gfx, gui_data_t* data) {
     GFX_setFont(gfx, u8g2_font_wqy9_t_lunar);
     GFX_setTextColor(gfx, GFX_BLACK, GFX_WHITE);
 
-    // Parse todo string (format: "item1\nitem2\n...")
+    // Parse todo string (format: "item1; item2; ...")
     if (data->todo_string[0] == '\0') {
         // No todos, show empty message
         GFX_setCursor(gfx, right_x, y + GFX_getFontAscent(gfx));
@@ -409,8 +551,8 @@ static void DrawTodoList(Adafruit_GFX* gfx, gui_data_t* data) {
     memcpy(todo_copy, data->todo_string, sizeof(todo_copy));
     todo_copy[sizeof(todo_copy) - 1] = '\0';
 
-    // Split by newline and draw each item
-    char* token = strtok(todo_copy, "\n");
+    // Split by semicolon and draw each item
+    char* token = strtok(todo_copy, ";");
     int16_t line_y = y + GFX_getFontAscent(gfx);
     int16_t line_height = GFX_getFontHeight(gfx) + 4;  // Space between lines including horizontal line
     int16_t max_lines = todo_height / line_height;
@@ -426,14 +568,15 @@ static void DrawTodoList(Adafruit_GFX* gfx, gui_data_t* data) {
         if (strlen(token) > 0) {
             // Check if text fits in width, skip if overflow
             int16_t text_width = GFX_getUTF8Width(gfx, token);
-            if (text_width <= right_width - 5) {
-                // Draw horizontal line before item (except first)
-                if (!first_line) {
-                    GFX_drawFastHLine(gfx, right_x, line_y - GFX_getFontHeight(gfx) - 2, right_width, GFX_BLACK);
-                }
+            if (text_width <= right_width - 20) {  // Reserve space for checkbox
+                // Draw checkbox (empty box)
+                int16_t checkbox_x = right_x;
+                int16_t checkbox_y = line_y - GFX_getFontHeight(gfx) + 2;
+                int16_t checkbox_size = 8;
+                GFX_drawRect(gfx, checkbox_x, checkbox_y, checkbox_size, checkbox_size, GFX_BLACK);
                 
-                // Draw todo item
-                GFX_setCursor(gfx, right_x, line_y);
+                // Draw todo item text (with checkbox offset)
+                GFX_setCursor(gfx, right_x + checkbox_size + 4, line_y);
                 GFX_printf(gfx, "%s", token);
                 line_y += line_height;
                 line_count++;
@@ -441,7 +584,7 @@ static void DrawTodoList(Adafruit_GFX* gfx, gui_data_t* data) {
             }
             // If text overflows, skip this line (don't display)
         }
-        token = strtok(NULL, "\n");
+        token = strtok(NULL, ";");
     }
 }
 
@@ -454,10 +597,142 @@ static void DrawCalendar(Adafruit_GFX* gfx, tm_t* tm, struct Lunar_Date* Lunar, 
 }
 
 static void DrawCalendarTodo(Adafruit_GFX* gfx, tm_t* tm, struct Lunar_Date* Lunar, gui_data_t* data) {
-    // Simple calendar + todo mode: left 50% calendar, right 50% info + todos
-    DrawSimpleCalendar(gfx, tm, data);
+    // New layout: status bar, today info, calendar + todos, footer
+    int16_t status_bar_height = 22;
+    int16_t today_info_height = 60;
+    int16_t calendar_start_y = status_bar_height + today_info_height;
+    
+    // Draw status bar (top)
+    DrawStatusBar(gfx, data);
+    
+    // Draw today info area
     DrawTodayInfo(gfx, tm, Lunar, data);
-    DrawTodoList(gfx, data);
+    
+    // Adjust calendar and todo positions
+    int16_t left_width = (data->width * 65) / 100;
+    int16_t calendar_y = calendar_start_y;
+    int16_t calendar_height = data->height - calendar_y - 22;  // Reserve space for footer
+    
+    // Draw simple calendar (left 65%)
+    int16_t x = 5;
+    int16_t y = calendar_y;
+    
+    // Draw week header
+    GFX_setFont(gfx, u8g2_font_wqy9_t_lunar);
+    uint8_t w = (left_width - 2 * x) / 7;
+    uint8_t h = 24;
+    uint8_t r = (left_width - 2 * x) % 7;
+    uint8_t fh = (h - GFX_getFontHeight(gfx)) / 2 + GFX_getFontAscent(gfx) + 1;
+    int16_t cw = GFX_getUTF8Width(gfx, Lunar_DayString[0]);
+    for (int i = 0; i < 7; i++) {
+        uint8_t day = (data->week_start + i) % 7;
+        uint16_t bg = (day == 0 || day == 6) ? GFX_RED : GFX_BLACK;
+        GFX_fillRect(gfx, x + i * w, y, i == 6 ? (w + r) : w, h, bg);
+        GFX_setTextColor(gfx, GFX_WHITE, bg);
+        GFX_setCursor(gfx, x + (w - cw) / 2 + i * w, y + fh);
+        GFX_printf(gfx, "%s", Lunar_DayString[day]);
+    }
+    
+    // Draw month days
+    y += h + 5;
+    uint8_t firstDayWeek = get_first_day_week(tm->tm_year + YEAR0, tm->tm_mon + 1);
+    int8_t adjustedFirstDay = (firstDayWeek - data->week_start + 7) % 7;
+    uint8_t monthMaxDays = thisMonthMaxDays(tm->tm_year + YEAR0, tm->tm_mon + 1);
+    uint8_t monthDayRows = 1 + (monthMaxDays - (7 - adjustedFirstDay) + 6) / 7;
+    
+    int16_t bw = (left_width - x - 5) / 7;
+    int16_t bh = (calendar_height - (y - calendar_y) - 5) / monthDayRows;
+    
+    for (uint8_t i = 0; i < monthMaxDays; i++) {
+        uint8_t day = i + 1;
+        int16_t actualWeek = (firstDayWeek + i) % 7;
+        int16_t displayWeek = (adjustedFirstDay + i) % 7;
+        bool weekend = (actualWeek == 0) || (actualWeek == 6);
+        
+        int16_t cr = 10;
+        int16_t bx = x + (bw - 2 * cr) / 2 + displayWeek * bw;
+        int16_t by = y + (bh - 2 * cr) / 2 + (i + adjustedFirstDay) / 7 * bh + 3;
+        
+        if (day == tm->tm_mday) {
+            GFX_fillCircle(gfx, bx + cr, by + cr - 3, 2 * cr, GFX_RED);
+            GFX_setTextColor(gfx, GFX_WHITE, GFX_RED);
+        } else {
+            GFX_setTextColor(gfx, weekend ? GFX_RED : GFX_BLACK, GFX_WHITE);
+        }
+        
+        char buf[10] = {0};
+        snprintf(buf, sizeof(buf), "%d", day);
+        GFX_setFont(gfx, u8g2_font_helvB14_tn);
+        GFX_setCursor(gfx, bx + (2 * cr - GFX_getUTF8Width(gfx, buf)) / 2, by - (cr - GFX_getFontHeight(gfx)) - 1);
+        GFX_printf(gfx, "%s", buf);
+    }
+    
+    // Draw todo list (right 35%)
+    int16_t right_x = left_width + 5;
+    int16_t right_width = data->width - left_width - 10;
+    int16_t todo_y = calendar_y;
+    int16_t todo_height = calendar_height;
+    
+    // Draw title "待办事项" (red color)
+    GFX_setFont(gfx, u8g2_font_wqy12_t_lunar);
+    GFX_setTextColor(gfx, GFX_RED, GFX_WHITE);
+    GFX_setCursor(gfx, right_x, todo_y + GFX_getFontAscent(gfx));
+    GFX_printf(gfx, "待办事项");
+    
+    // Move to content area below title
+    todo_y += GFX_getFontHeight(gfx) + 5;
+    todo_height -= (GFX_getFontHeight(gfx) + 5);
+    
+    // Use smaller font for todo items
+    GFX_setFont(gfx, u8g2_font_wqy9_t_lunar);
+    GFX_setTextColor(gfx, GFX_BLACK, GFX_WHITE);
+    
+    // Parse todo string (format: "item1; item2; ...")
+    if (data->todo_string[0] == '\0') {
+        // No todos, show empty message
+        GFX_setCursor(gfx, right_x, todo_y + GFX_getFontAscent(gfx));
+        GFX_printf(gfx, "无待办事项");
+    } else {
+        char todo_copy[64];
+        memcpy(todo_copy, data->todo_string, sizeof(todo_copy));
+        todo_copy[sizeof(todo_copy) - 1] = '\0';
+        
+        // Split by semicolon and draw each item
+        char* token = strtok(todo_copy, ";");
+        int16_t line_y = todo_y + GFX_getFontAscent(gfx);
+        int16_t line_height = GFX_getFontHeight(gfx) + 4;
+        int16_t max_lines = todo_height / line_height;
+        
+        uint8_t line_count = 0;
+        while (token != NULL && line_count < max_lines) {
+            // Trim leading/trailing spaces
+            while (*token == ' ') token++;
+            char* end = token + strlen(token) - 1;
+            while (end > token && *end == ' ') *end-- = '\0';
+            
+            if (strlen(token) > 0) {
+                // Check if text fits in width
+                int16_t text_width = GFX_getUTF8Width(gfx, token);
+                if (text_width <= right_width - 20) {  // Reserve space for checkbox
+                    // Draw checkbox (empty box)
+                    int16_t checkbox_x = right_x;
+                    int16_t checkbox_y = line_y - GFX_getFontHeight(gfx) + 2;
+                    int16_t checkbox_size = 8;
+                    GFX_drawRect(gfx, checkbox_x, checkbox_y, checkbox_size, checkbox_size, GFX_BLACK);
+                    
+                    // Draw todo item text
+                    GFX_setCursor(gfx, right_x + checkbox_size + 4, line_y);
+                    GFX_printf(gfx, "%s", token);
+                    line_y += line_height;
+                    line_count++;
+                }
+            }
+            token = strtok(NULL, ";");
+        }
+    }
+    
+    // Draw footer (bottom)
+    DrawFooter(gfx, data);
 }
 
 // clang-format off

@@ -72,11 +72,34 @@
 			<legend>待办事项</legend>
 			<div class="flex-container">
 				<div class="flex-group" style="width: 100%; flex-direction: column; align-items: stretch;">
-					<label for="todoTextarea">待办事项（每行一个，总长度不超过60个字符）:</label>
-					<textarea id="todoTextarea" rows="4" style="width: 100%; padding: 0.5rem; font-size: 1rem; border: 1px solid #dee2e6; border-radius: 0.375rem; box-sizing: border-box; resize: vertical; font-family: inherit;" placeholder="输入待办事项，每行一个&#10;例如：&#10;完成项目报告&#10;回复邮件&#10;准备会议"></textarea>
+					<label for="todoTextarea">待办事项（用分号分隔，总长度不超过60个字符）:</label>
+					<textarea id="todoTextarea" rows="4" style="width: 100%; padding: 0.5rem; font-size: 1rem; border: 1px solid #dee2e6; border-radius: 0.375rem; box-sizing: border-box; resize: vertical; font-family: inherit;" placeholder="输入待办事项，用分号分隔&#10;例如：团队会议; 项目报告; 健身锻炼"></textarea>
 					<div style="margin-top: 8px; display: flex; justify-content: space-between; align-items: center;">
 						<span id="todoCharCount" style="font-size: 0.85rem; color: #666;">0 / 60 字符</span>
 						<button id="syncTodoButton" type="button" class="primary" onclick="syncTodo()">同步</button>
+					</div>
+				</div>
+			</div>
+		</fieldset>
+		<fieldset>
+			<legend>地址位置和天气信息</legend>
+			<div class="flex-container">
+				<div class="flex-group" style="width: 100%; flex-direction: column; align-items: stretch;">
+					<label for="locationInput">地址位置（纯文本，不超过60个字符）:</label>
+					<input type="text" id="locationInput" style="width: 100%; padding: 0.5rem; font-size: 1rem; border: 1px solid #dee2e6; border-radius: 0.375rem; box-sizing: border-box;" placeholder="例如：上海 · 浦东新区 · 康桥" maxlength="60">
+					<div style="margin-top: 8px; display: flex; justify-content: space-between; align-items: center;">
+						<span id="locationCharCount" style="font-size: 0.85rem; color: #666;">0 / 60 字符</span>
+						<button id="setLocationButton" type="button" class="primary" onclick="setLocation()">设置</button>
+					</div>
+				</div>
+			</div>
+			<div class="flex-container" style="margin-top: 1rem;">
+				<div class="flex-group" style="width: 100%; flex-direction: column; align-items: stretch;">
+					<label for="weatherInput">天气信息（格式：温度,天气,湿度,风向,风力描述，不超过60个字符）:</label>
+					<input type="text" id="weatherInput" style="width: 100%; padding: 0.5rem; font-size: 1rem; border: 1px solid #dee2e6; border-radius: 0.375rem; box-sizing: border-box;" placeholder="例如：7.6,晴,56,东南,东南风 二级" maxlength="60">
+					<div style="margin-top: 8px; display: flex; justify-content: space-between; align-items: center;">
+						<span id="weatherCharCount" style="font-size: 0.85rem; color: #666;">0 / 60 字符</span>
+						<button id="setWeatherButton" type="button" class="primary" onclick="setWeather()">设置</button>
 					</div>
 				</div>
 			</div>

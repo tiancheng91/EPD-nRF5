@@ -225,8 +225,8 @@ async function syncTodo() {
     return;
   }
 
-  if (stringLen > 60) {
-    addLog("错误：待办事项字符串长度超过60个字符（包括换行符）");
+  if (stringLen > 19) {
+    addLog("错误：待办事项字符串长度超过19个字符（包括换行符）");
     return;
   }
 
@@ -268,8 +268,8 @@ async function setLocation() {
     return;
   }
 
-  if (stringLen > 60) {
-    addLog("错误：地址位置字符串长度超过60个字符");
+  if (stringLen > 19) {
+    addLog("错误：地址位置字符串长度超过19个字符");
     return;
   }
 
@@ -311,8 +311,8 @@ async function setWeather() {
     return;
   }
 
-  if (stringLen > 60) {
-    addLog("错误：天气信息字符串长度超过60个字符");
+  if (stringLen > 19) {
+    addLog("错误：天气信息字符串长度超过19个字符");
     return;
   }
 
@@ -333,8 +333,8 @@ function updateLocationCharCount() {
   const encoder = new TextEncoder();
   const bytes = encoder.encode(input.value);
   const count = bytes.length;
-  charCount.textContent = `${count} / 60 字符`;
-  charCount.style.color = count > 60 ? '#dc3545' : '#666';
+  charCount.textContent = `${count} / 19 字符`;
+  charCount.style.color = count > 19 ? '#dc3545' : '#666';
 }
 
 function updateWeatherCharCount() {
@@ -345,8 +345,8 @@ function updateWeatherCharCount() {
   const encoder = new TextEncoder();
   const bytes = encoder.encode(input.value);
   const count = bytes.length;
-  charCount.textContent = `${count} / 60 字符`;
-  charCount.style.color = count > 60 ? '#dc3545' : '#666';
+  charCount.textContent = `${count} / 19 字符`;
+  charCount.style.color = count > 19 ? '#dc3545' : '#666';
 }
 
 function updateTodoCharCount() {
@@ -361,10 +361,10 @@ function updateTodoCharCount() {
   const length = encoded.length;
 
   // 更新字符计数显示
-  charCount.textContent = `${length} / 60 字符`;
+  charCount.textContent = `${length} / 19 字符`;
   
-  // 如果超过60个字符，显示警告颜色
-  if (length > 60) {
+  // 如果超过19个字符，显示警告颜色
+  if (length > 19) {
     charCount.style.color = '#dc3545'; // 红色
   } else if (length > 50) {
     charCount.style.color = '#ffc107'; // 黄色警告
@@ -617,11 +617,11 @@ function handleNotify(value, idx) {
     
     // 更新待办事项、地址位置和天气信息（从配置中读取）
     // todo_string offset: 14 (after calendar_mode)
-    // location_string offset: 78 (after todo_string[64])
-    // weather_string offset: 142 (after location_string[64])
-    if (data.length > 78) {
+    // location_string offset: 34 (after todo_string[20])
+    // weather_string offset: 54 (after location_string[20])
+    if (data.length > 34) {
       // 更新待办事项
-      const todoString = extractStringFromConfig(data, 14, 64);
+      const todoString = extractStringFromConfig(data, 14, 20);
       const todoTextarea = document.getElementById('todoTextarea');
       if (todoTextarea && todoString) {
         todoTextarea.value = todoString;
@@ -629,7 +629,7 @@ function handleNotify(value, idx) {
       }
       
       // 更新地址位置
-      const locationString = extractStringFromConfig(data, 78, 64);
+      const locationString = extractStringFromConfig(data, 34, 20);
       const locationInput = document.getElementById('locationInput');
       if (locationInput && locationString) {
         locationInput.value = locationString;
@@ -637,8 +637,8 @@ function handleNotify(value, idx) {
       }
       
       // 更新天气信息
-      if (data.length > 142) {
-        const weatherString = extractStringFromConfig(data, 142, 64);
+      if (data.length > 54) {
+        const weatherString = extractStringFromConfig(data, 54, 20);
         const weatherInput = document.getElementById('weatherInput');
         if (weatherInput && weatherString) {
           weatherInput.value = weatherString;

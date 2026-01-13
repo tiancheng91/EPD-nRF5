@@ -241,6 +241,41 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             } else {
                 data.todo_string[0] = '\0';
             }
+            
+            // Set test location data based on mode
+            const char* locations[] = {
+                "北京市朝阳区",
+                "上海市浦东新区",
+                "广州市天河区",
+                "深圳市南山区",
+                "杭州市西湖区"
+            };
+            int location_index = (g_display_mode + (int)(g_display_time / 86400)) % 5;
+            strcpy(data.location_string, locations[location_index]);
+            
+            // Set test weather data based on month and mode
+            // Format: "temp,weather,humidity,wind_dir,wind_desc"
+            struct tm* tm_info = localtime(&g_display_time);
+            int month = tm_info->tm_mon + 1;  // 1-12
+            
+            // Different weather patterns for different seasons
+            const char* weather_data[][4] = {
+                // Spring (3-5): mild temperature, various weather
+                {"18,多云,60,东南,轻风", "20,晴,55,南,微风", "16,小雨,75,东北,微风", "22,晴,50,西南,轻风"},
+                // Summer (6-8): hot temperature
+                {"28,晴,70,南,微风", "32,晴,65,东南,轻风", "26,多云,75,东,微风", "30,晴,60,西南,微风"},
+                // Autumn (9-11): cool temperature
+                {"15,晴,55,西北,微风", "18,多云,60,北,轻风", "12,小雨,70,东北,微风", "20,晴,50,西南,微风"},
+                // Winter (12-2): cold temperature
+                {"5,晴,45,北,微风", "8,多云,50,西北,轻风", "2,小雪,65,东北,微风", "10,晴,40,西南,微风"}
+            };
+            
+            int season = (month >= 3 && month <= 5) ? 0 :  // Spring
+                         (month >= 6 && month <= 8) ? 1 :  // Summer
+                         (month >= 9 && month <= 11) ? 2 :  // Autumn
+                         3;  // Winter
+            int weather_index = (g_display_mode + (int)(g_display_time / 3600)) % 4;
+            strcpy(data.weather_string, weather_data[season][weather_index]);
 
             // Call DrawGUI to render the interface
             DrawGUI(&data, DrawBitmap, NULL);

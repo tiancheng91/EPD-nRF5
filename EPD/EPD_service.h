@@ -31,7 +31,7 @@
  * @details Simple string format for todo items, separated by semicolon.
  */
 typedef struct {
-    char todo_string[64];  /**< Todo string (format: "item1; item2; ...", max 60 chars + terminator) */
+    char todo_string[20];  /**< Todo string (format: "item1; item2; ...", max 19 chars + terminator) */
 } todo_data_t;
 
 /**@brief   Macro for defining a ble_hts instance.
@@ -82,9 +82,9 @@ enum EPD_CMDS {
 
     EPD_CMD_WRITE_IMAGE = 0x30, /** < write image data to EPD ram */
 
-    EPD_CMD_SET_TODO = 0x40,     /**< set todo list (format: "item1; item2; ...", max 60 chars) */
-    EPD_CMD_SET_LOCATION = 0x41,  /**< set location string (format: plain text, max 60 chars) */
-    EPD_CMD_SET_WEATHER = 0x42,   /**< set weather info (format: "temp,weather,humidity,wind_dir,wind_desc", max 60 chars) */
+    EPD_CMD_SET_TODO = 0x40,     /**< set todo list (format: "item1; item2; ...", max 19 chars) */
+    EPD_CMD_SET_LOCATION = 0x41,  /**< set location string (format: plain text, max 19 chars) */
+    EPD_CMD_SET_WEATHER = 0x42,   /**< set weather info (format: "temp,weather,humidity,wind_dir,wind_desc", max 19 chars) */
 
     EPD_CMD_SET_CONFIG = 0x90, /**< set full EPD config */
     EPD_CMD_SYS_RESET = 0x91,  /**< MCU reset */

@@ -17,6 +17,8 @@ typedef struct {
     uint8_t en_pin;
     uint8_t display_mode;
     uint8_t week_start;
+    uint8_t calendar_mode;      /**< Calendar display mode (0: full, 1: simple+todo) */
+    char todo_string[64];       /**< Todo items string (format: "item1; item2; ...", max 60 chars) */
 } epd_config_t;
 
 #define EPD_CONFIG_SIZE (sizeof(epd_config_t) / sizeof(uint8_t))

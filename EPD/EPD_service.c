@@ -16,6 +16,7 @@
 
 #include "app_scheduler.h"
 #include "ble_srv_common.h"
+#include "GUI.h"
 #include "main.h"
 #include "nrf_delay.h"
 #include "nrf_gpio.h"
@@ -46,7 +47,9 @@ static void epd_gui_update(void* p_event_data, uint16_t event_size) {
         .week_start = p_epd->config.week_start,
         .temperature = epd->drv->read_temp(epd),
         .voltage = EPD_ReadVoltage(),
+        .calendar_mode = (calendar_display_mode_t)p_epd->config.calendar_mode,
     };
+    memcpy(data.todo_string, p_epd->config.todo_string, sizeof(data.todo_string));
 
     uint16_t dev_name_len = sizeof(data.ssid);
     uint32_t err_code = sd_ble_gap_device_name_get((uint8_t*)data.ssid, &dev_name_len);
@@ -167,7 +170,27 @@ static void epd_service_on_write(ble_epd_t* p_epd, uint8_t* p_data, uint16_t len
             uint32_t timestamp = (p_data[1] << 24) | (p_data[2] << 16) | (p_data[3] << 8) | p_data[4];
             timestamp += (length > 5 ? (int8_t)p_data[5] : 8) * 60 * 60;  // timezone
             set_timestamp(timestamp);
-            epd_update_display_mode(p_epd, length > 6 ? (display_mode_t)p_data[6] : MODE_CALENDAR);
+            
+            // 处理显示模式：mode=1(完整日历), mode=2(时钟), mode=3(日历&日程)
+            if (length > 6) {
+                uint8_t mode = p_data[6];
+                display_mode_t display_mode;
+                if (mode == 3) {
+                    // mode=3: 日历&日程模式（简洁日历+待办）
+                    display_mode = MODE_CALENDAR_TODO;
+                } else if (mode == 2) {
+                    // mode=2: 时钟模式
+                    display_mode = MODE_CLOCK;
+                } else {
+                    // mode=1: 完整日历模式（默认）
+                    display_mode = MODE_CALENDAR;
+                }
+                epd_update_display_mode(p_epd, display_mode);
+            } else {
+                // 默认使用完整日历模式
+                epd_update_display_mode(p_epd, MODE_CALENDAR);
+            }
+            
             ble_epd_on_timer(p_epd, timestamp, true);
         } break;
 
@@ -183,6 +206,40 @@ static void epd_service_on_write(ble_epd_t* p_epd, uint8_t* p_data, uint16_t len
             if (length < 3) return;
             p_epd->epd->drv->write_ram(p_epd->epd, p_data[1], &p_data[2], length - 2);
             break;
+
+        case EPD_CMD_SET_TODO: {
+            if (length < 2) {
+                NRF_LOG_ERROR("[EPD]: SET_TODO command too short\n");
+                return;
+            }
+
+            uint8_t string_len = p_data[1];
+            if (string_len > 60) {
+                NRF_LOG_WARNING("[EPD]: Todo string too long (%d), truncating to 60\n", string_len);
+                string_len = 60;
+            }
+
+            if (length < 2 + string_len) {
+                NRF_LOG_ERROR("[EPD]: SET_TODO command incomplete, expected %d bytes, got %d\n", 2 + string_len, length);
+                return;
+            }
+
+            // Clear todo string
+            memset(p_epd->config.todo_string, 0, sizeof(p_epd->config.todo_string));
+            // Copy todo string (max 60 chars + null terminator)
+            memcpy(p_epd->config.todo_string, &p_data[2], string_len);
+            p_epd->config.todo_string[string_len] = '\0';  // Ensure null termination
+
+            // Save to Flash
+            epd_config_write(&p_epd->config);
+
+            NRF_LOG_DEBUG("[EPD]: Todo string saved: %s\n", (uint32_t)p_epd->config.todo_string);
+
+            // Trigger display update if in calendar mode (full or todo)
+            if (p_epd->config.display_mode == MODE_CALENDAR || p_epd->config.display_mode == MODE_CALENDAR_TODO) {
+                ble_epd_on_timer(p_epd, timestamp(), true);
+            }
+        } break;
 
         case EPD_CMD_SET_CONFIG:
             if (length < 2) return;
@@ -347,6 +404,8 @@ uint32_t ble_epd_init(ble_epd_t* p_epd) {
 #endif
         if (p_epd->config.display_mode == 0xFF) p_epd->config.display_mode = MODE_CALENDAR;
         if (p_epd->config.week_start == 0xFF) p_epd->config.week_start = 0;
+        if (p_epd->config.calendar_mode == 0xFF) p_epd->config.calendar_mode = CALENDAR_MODE_FULL;
+        memset(p_epd->config.todo_string, 0, sizeof(p_epd->config.todo_string));
         epd_config_write(&p_epd->config);
     }
 
@@ -379,7 +438,8 @@ uint32_t ble_epd_string_send(ble_epd_t* p_epd, uint8_t* p_string, uint16_t lengt
 
 void ble_epd_on_timer(ble_epd_t* p_epd, uint32_t timestamp, bool force_update) {
     // Update calendar on 00:00:00, clock on every minute
-    if (force_update || (p_epd->config.display_mode == MODE_CALENDAR && timestamp % 86400 == 0) ||
+    if (force_update || 
+        ((p_epd->config.display_mode == MODE_CALENDAR || p_epd->config.display_mode == MODE_CALENDAR_TODO) && timestamp % 86400 == 0) ||
         (p_epd->config.display_mode == MODE_CLOCK && timestamp % 60 == 0)) {
         epd_gui_update_event_t event = {p_epd, timestamp};
         app_sched_event_put(&event, sizeof(epd_gui_update_event_t), epd_gui_update);

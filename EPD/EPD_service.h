@@ -26,6 +26,14 @@
 #include "GUI.h"
 #include "sdk_config.h"
 
+/**@brief Todo data structure.
+ *
+ * @details Simple string format for todo items, separated by semicolon.
+ */
+typedef struct {
+    char todo_string[64];  /**< Todo string (format: "item1; item2; ...", max 60 chars + terminator) */
+} todo_data_t;
+
 /**@brief   Macro for defining a ble_hts instance.
  *
  * @param   _name   Name of the instance.
@@ -73,6 +81,8 @@ enum EPD_CMDS {
     EPD_CMD_SET_WEEK_START = 0x21, /** < set week start day (0: Sunday, 1: Monday, ...) */
 
     EPD_CMD_WRITE_IMAGE = 0x30, /** < write image data to EPD ram */
+
+    EPD_CMD_SET_TODO = 0x40, /**< set todo list (format: "item1; item2; ...", max 60 chars) */
 
     EPD_CMD_SET_CONFIG = 0x90, /**< set full EPD config */
     EPD_CMD_SYS_RESET = 0x91,  /**< MCU reset */

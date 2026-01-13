@@ -58,6 +58,25 @@ static void SSD16xx_Refresh(epd_model_t* epd) {
     _setPartialRamArea(epd, 0, 0, epd->width, epd->height);  // DO NOT REMOVE!
 }
 
+void SSD16xx_PartialRefresh(epd_model_t* epd, uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
+    NRF_LOG_DEBUG("[EPD]: partial refresh begin: x=%d y=%d w=%d h=%d\n", x, y, w, h);
+
+    // Ensure byte boundaries
+    uint16_t wb = (w + 7) / 8;
+    x -= x % 8;
+    w = wb * 8;
+    if (x + w > epd->width) w = epd->width - x;
+    if (y + h > epd->height) h = epd->height - y;
+
+    _setPartialRamArea(epd, x, y, w, h);
+
+    EPD_Write(SSD16xx_DISP_CTRL1, epd->color == COLOR_BWR ? 0x80 : 0x40, 0x00);
+    SSD16xx_Update(0xF7);
+    SSD16xx_WaitBusy(UINT16_MAX);
+
+    NRF_LOG_DEBUG("[EPD]: partial refresh end\n");
+}
+
 void SSD16xx_Clear(epd_model_t* epd, bool refresh) {
     uint32_t ram_bytes = ((epd->width + 7) / 8) * epd->height;
 
@@ -115,6 +134,7 @@ static const epd_driver_t epd_drv_ssd16xx = {
     .write_image = SSD16xx_Write_Image,
     .write_ram = SSD16xx_Write_Ram,
     .refresh = SSD16xx_Refresh,
+    .partial_refresh = SSD16xx_PartialRefresh,
     .sleep = SSD16xx_Sleep,
     .read_temp = SSD16xx_Read_Temp,
     .read_busy = SSD16xx_ReadBusy,

@@ -143,7 +143,15 @@ async function syncTime(mode) {
     mode
   ]);
   if (await write(EpdCmd.SET_TIME, data)) {
-    addLog("时间已同步！");
+    if (mode === 1) {
+      addLog("时间已同步！日历模式已设置。");
+    } else if (mode === 2) {
+      addLog("时间已同步！时钟模式已设置。");
+    } else if (mode === 3) {
+      addLog("时间已同步！日历&日程模式已设置。");
+    } else {
+      addLog("时间已同步！");
+    }
     addLog("屏幕刷新完成前请不要操作。");
   }
 }
@@ -154,6 +162,30 @@ async function clearScreen() {
     addLog("清屏指令已发送！");
     addLog("屏幕刷新完成前请不要操作。");
   }
+}
+
+async function setCalendarDisplayMode() {
+  if (!epdCharacteristic) {
+    addLog("服务不可用，请检查蓝牙连接");
+    return;
+  }
+  
+  const calendarModeSelect = document.getElementById("calendarDisplayMode");
+  if (!calendarModeSelect) {
+    addLog("找不到日历显示模式选择器");
+    return;
+  }
+  
+  const calendarMode = parseInt(calendarModeSelect.value);
+  if (calendarMode !== 0 && calendarMode !== 1) {
+    addLog("无效的日历显示模式值");
+    return;
+  }
+  
+  // 使用 SET_TIME 命令设置日历显示模式
+  // mode=1: 完整日历模式, mode=3: 简洁日历+待办模式
+  const displayMode = calendarMode === 0 ? 1 : 3; // 1=MODE_CALENDAR(完整), 3=日历&日程模式
+  await syncTime(displayMode);
 }
 
 async function sendcmd() {
@@ -309,6 +341,10 @@ function updateButtonStatus(forceDisabled = false) {
   document.getElementById("clearscreenbutton").disabled = status;
   document.getElementById("sendimgbutton").disabled = status;
   document.getElementById("setDriverbutton").disabled = status;
+  const setCalendarModeButton = document.getElementById("setCalendarModeButton");
+  if (setCalendarModeButton) setCalendarModeButton.disabled = status;
+  const calendarModeSelect = document.getElementById("calendarDisplayMode");
+  if (calendarModeSelect) calendarModeSelect.disabled = status;
 }
 
 function disconnect() {
@@ -358,11 +394,22 @@ function handleNotify(value, idx) {
   const data = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
   if (idx == 0) {
     addLog(`收到配置：${bytes2hex(data)}`);
+    
     const epdpins = document.getElementById("epdpins");
     const epddriver = document.getElementById("epddriver");
     epdpins.value = bytes2hex(data.slice(0, 7));
     if (data.length > 10) epdpins.value += bytes2hex(data.slice(10, 11));
     epddriver.value = bytes2hex(data.slice(7, 8));
+    
+    // 更新日历显示模式下拉菜单（从配置中读取calendar_mode）
+    if (data.length > 13) {
+      const calendarMode = data[13];
+      const calendarModeSelect = document.getElementById("calendarDisplayMode");
+      if (calendarModeSelect) {
+        calendarModeSelect.value = calendarMode.toString();
+      }
+    }
+    
     updateDitcherOptions();
   } else {
     if (textDecoder == null) textDecoder = new TextDecoder();

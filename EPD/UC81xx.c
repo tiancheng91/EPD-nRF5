@@ -54,6 +54,26 @@ void UC81xx_Refresh(epd_model_t* epd) {
     NRF_LOG_DEBUG("[EPD]: refresh end\n");
 }
 
+void UC81xx_PartialRefresh(epd_model_t* epd, uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
+    NRF_LOG_DEBUG("[EPD]: partial refresh begin: x=%d y=%d w=%d h=%d\n", x, y, w, h);
+
+    // Ensure byte boundaries
+    uint16_t wb = (w + 7) / 8;
+    x -= x % 8;
+    w = wb * 8;
+    if (x + w > epd->width) w = epd->width - x;
+    if (y + h > epd->height) h = epd->height - y;
+
+    _setPartialRamArea(epd, x, y, w, h);
+
+    EPD_WriteCmd(UC81xx_DRF);
+    if (epd->color == COLOR_BWRY) EPD_WriteByte(0x00);
+    delay(100);
+    UC81xx_WaitBusy(UINT16_MAX);
+
+    NRF_LOG_DEBUG("[EPD]: partial refresh end\n");
+}
+
 void UC81xx_Init(epd_model_t* epd) {
     EPD_Reset(true, 50);
     switch (epd->ic) {
@@ -282,6 +302,7 @@ static const epd_driver_t epd_drv_uc81xx = {
     .write_image = UC81xx_Write_Image,
     .write_ram = UC81xx_Write_Ram,
     .refresh = UC81xx_Refresh,
+    .partial_refresh = UC81xx_PartialRefresh,
     .sleep = UC81xx_Sleep,
     .read_temp = UC81xx_Read_Temp,
     .read_busy = UC81xx_ReadBusy,

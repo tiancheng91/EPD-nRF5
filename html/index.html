@@ -54,6 +54,14 @@
 					<button id="clockmodebutton" type="button" class="primary" onclick="syncTime(2)">时钟模式</button>
 					<button id="clearscreenbutton" type="button" class="secondary" onclick="clearScreen()">清除屏幕</button>
 				</div>
+				<div class="flex-group">
+					<label for="calendarDisplayMode">日历显示模式:</label>
+					<select id="calendarDisplayMode" onchange="setCalendarDisplayMode()">
+						<option value="0">完整日历</option>
+						<option value="1">日历&日程</option>
+					</select>
+					<button id="setCalendarModeButton" type="button" class="primary" onclick="setCalendarDisplayMode()">应用</button>
+				</div>
 				<div class="flex-group right debug">
 					<input type="text" id="cmdTXT" value="">
 					<button id="sendcmdbutton" type="button" class="primary" onclick="sendcmd()">发送命令</button>

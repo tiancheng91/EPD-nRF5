@@ -7,7 +7,15 @@ typedef enum {
     MODE_PICTURE = 0,
     MODE_CALENDAR = 1,
     MODE_CLOCK = 2,
+    MODE_CALENDAR_TODO = 3, /**< Calendar + todo mode (simple calendar with todo list) */
 } display_mode_t;
+
+/**@brief Calendar display mode.
+ */
+typedef enum {
+    CALENDAR_MODE_FULL = 0,      /**< Full calendar mode */
+    CALENDAR_MODE_SIMPLE_TODO = 1, /**< Simple calendar + todo mode */
+} calendar_display_mode_t;
 
 typedef struct {
     display_mode_t mode;
@@ -19,6 +27,8 @@ typedef struct {
     int8_t temperature;
     uint16_t voltage;
     char ssid[20];
+    calendar_display_mode_t calendar_mode; /**< Calendar display mode */
+    char todo_string[64];                  /**< Todo items string (format: "item1; item2; ...", max 60 chars) */
 } gui_data_t;
 
 void DrawGUI(gui_data_t* data, buffer_callback callback, void* callback_data);

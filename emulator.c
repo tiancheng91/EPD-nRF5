@@ -176,7 +176,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             DeleteObject(borderPen);
 
             // Display current mode at the top of the bitmap
-            const wchar_t* modeText = (g_display_mode == MODE_CLOCK) ? L"时钟模式" : L"日历模式";
+            const wchar_t* modeText;
+            if (g_display_mode == MODE_CLOCK) {
+                modeText = L"时钟模式";
+            } else if (g_display_mode == MODE_CALENDAR_TODO) {
+                modeText = L"日历待办模式";
+            } else {
+                modeText = L"日历模式";
+            }
             int modeTextY = drawY - 20;  // Above the bitmap
             SetTextColor(hdc, RGB(50, 50, 50));
             SetBkMode(hdc, TRANSPARENT);
@@ -226,8 +233,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 .week_start = g_week_start,
                 .temperature = 25,
                 .voltage = 2920,
-                .ssid = "NRF_EPD_84AC",
+                .calendar_mode = (g_display_mode == MODE_CALENDAR_TODO) ? CALENDAR_MODE_SIMPLE_TODO : CALENDAR_MODE_FULL,
             };
+            strcpy(data.ssid, "NRF_EPD_84AC");
+            if (g_display_mode == MODE_CALENDAR_TODO) {
+                strcpy(data.todo_string, "完成项目报告\n购买生活用品\n预约医生检查\n阅读技术文档\n准备会议材料");
+            } else {
+                data.todo_string[0] = '\0';
+            }
 
             // Call DrawGUI to render the interface
             DrawGUI(&data, DrawBitmap, NULL);
@@ -244,6 +257,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             if (wParam == VK_SPACE) {
                 if (g_display_mode == MODE_CLOCK)
                     g_display_mode = MODE_CALENDAR;
+                else if (g_display_mode == MODE_CALENDAR)
+                    g_display_mode = MODE_CALENDAR_TODO;
                 else
                     g_display_mode = MODE_CLOCK;
 

@@ -17,6 +17,8 @@ const EpdCmd = {
 
   WRITE_IMG: 0x30, // v1.6
 
+  SET_TODO: 0x40, // 待办事项
+
   SET_CONFIG: 0x90,
   SYS_RESET: 0x91,
   SYS_SLEEP: 0x92,
@@ -188,6 +190,77 @@ async function setCalendarDisplayMode() {
   await syncTime(displayMode);
 }
 
+async function syncTodo() {
+  if (!epdCharacteristic) {
+    addLog("服务不可用，请检查蓝牙连接");
+    return;
+  }
+
+  const textarea = document.getElementById('todoTextarea');
+  if (!textarea) {
+    addLog("找不到待办事项输入框");
+    return;
+  }
+
+  // 获取文本内容，保持换行符
+  let todoString = textarea.value;
+  
+  // 去除末尾的换行符
+  todoString = todoString.replace(/\n+$/, '');
+  
+  if (todoString.length === 0) {
+    addLog("待办事项不能为空");
+    return;
+  }
+
+  // 转换为UTF-8编码的字节数组
+  const encoder = new TextEncoder();
+  const todoBytes = encoder.encode(todoString);
+  const stringLen = todoBytes.length;
+
+  if (stringLen === 0) {
+    addLog("待办事项字符串为空");
+    return;
+  }
+
+  if (stringLen > 60) {
+    addLog("错误：待办事项字符串长度超过60个字符（包括换行符）");
+    return;
+  }
+
+  // 构建命令数据：[0x40] [string_len] [todo_string...]
+  const data = new Uint8Array([stringLen, ...todoBytes]);
+
+  if (await write(EpdCmd.SET_TODO, data)) {
+    addLog(`待办事项已同步！长度: ${stringLen} 字符`);
+    addLog(`内容: ${todoString.replace(/\n/g, '\\n')}`);
+  }
+}
+
+function updateTodoCharCount() {
+  const textarea = document.getElementById('todoTextarea');
+  const charCount = document.getElementById('todoCharCount');
+  if (!textarea || !charCount) return;
+
+  // 获取文本内容，保持换行符，计算UTF-8编码后的长度
+  const text = textarea.value;
+  const encoder = new TextEncoder();
+  const encoded = encoder.encode(text);
+  const length = encoded.length;
+
+  // 更新字符计数显示
+  charCount.textContent = `${length} / 60 字符`;
+  
+  // 如果超过60个字符，显示警告颜色
+  if (length > 60) {
+    charCount.style.color = '#dc3545'; // 红色
+  } else if (length > 50) {
+    charCount.style.color = '#ffc107'; // 黄色警告
+  } else {
+    charCount.style.color = '#666'; // 默认灰色
+  }
+}
+
 async function sendcmd() {
   const cmdTXT = document.getElementById('cmdTXT').value;
   if (cmdTXT == '') return;
@@ -345,6 +418,8 @@ function updateButtonStatus(forceDisabled = false) {
   if (setCalendarModeButton) setCalendarModeButton.disabled = status;
   const calendarModeSelect = document.getElementById("calendarDisplayMode");
   if (calendarModeSelect) calendarModeSelect.disabled = status;
+  const syncTodoButton = document.getElementById("syncTodoButton");
+  if (syncTodoButton) syncTodoButton.disabled = status;
 }
 
 function disconnect() {
@@ -688,4 +763,11 @@ document.body.onload = () => {
   initEventHandlers();
   updateButtonStatus();
   checkDebugMode();
+
+  // 初始化待办事项字符计数
+  const todoTextarea = document.getElementById('todoTextarea');
+  if (todoTextarea) {
+    todoTextarea.addEventListener('input', updateTodoCharCount);
+    updateTodoCharCount();
+  }
 }

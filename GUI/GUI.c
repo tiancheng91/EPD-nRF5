@@ -383,10 +383,21 @@ static void DrawTodoList(Adafruit_GFX* gfx, gui_data_t* data) {
     int16_t y = data->height / 3 + 5;
     int16_t todo_height = (data->height * 2) / 3 - 10;
 
+    // Draw title "提醒事项"
+    GFX_setFont(gfx, u8g2_font_wqy12_t_lunar);
+    GFX_setTextColor(gfx, GFX_BLACK, GFX_WHITE);
+    GFX_setCursor(gfx, right_x, y + GFX_getFontAscent(gfx));
+    GFX_printf(gfx, "提醒事项");
+
+    // Move to content area below title
+    y += GFX_getFontHeight(gfx) + 5;
+    todo_height -= (GFX_getFontHeight(gfx) + 5);
+
+    // Use smaller font for todo items
     GFX_setFont(gfx, u8g2_font_wqy9_t_lunar);
     GFX_setTextColor(gfx, GFX_BLACK, GFX_WHITE);
 
-    // Parse todo string (format: "item1; item2; ...")
+    // Parse todo string (format: "item1\nitem2\n...")
     if (data->todo_string[0] == '\0') {
         // No todos, show empty message
         GFX_setCursor(gfx, right_x, y + GFX_getFontAscent(gfx));
@@ -398,13 +409,14 @@ static void DrawTodoList(Adafruit_GFX* gfx, gui_data_t* data) {
     memcpy(todo_copy, data->todo_string, sizeof(todo_copy));
     todo_copy[sizeof(todo_copy) - 1] = '\0';
 
-    // Split by semicolon and draw each item
-    char* token = strtok(todo_copy, ";");
+    // Split by newline and draw each item
+    char* token = strtok(todo_copy, "\n");
     int16_t line_y = y + GFX_getFontAscent(gfx);
-    int16_t line_height = GFX_getFontHeight(gfx) + 2;
+    int16_t line_height = GFX_getFontHeight(gfx) + 4;  // Space between lines including horizontal line
     int16_t max_lines = todo_height / line_height;
 
     uint8_t line_count = 0;
+    bool first_line = true;
     while (token != NULL && line_count < max_lines) {
         // Trim leading/trailing spaces
         while (*token == ' ') token++;
@@ -412,31 +424,24 @@ static void DrawTodoList(Adafruit_GFX* gfx, gui_data_t* data) {
         while (end > token && *end == ' ') *end-- = '\0';
 
         if (strlen(token) > 0) {
-            // Check if text fits in width, truncate if needed
+            // Check if text fits in width, skip if overflow
             int16_t text_width = GFX_getUTF8Width(gfx, token);
-            if (text_width > right_width - 5) {
-                // Truncate text to fit
-                char truncated[32] = {0};
-                uint8_t i = 0;
-                while (i < sizeof(truncated) - 1 && token[i] != '\0') {
-                    // Approximate UTF-8 character width (simplified)
-                    int16_t next_width = GFX_getUTF8Width(gfx, truncated);
-                    if (next_width > right_width - 15) break;  // Leave some margin
-                    truncated[i] = token[i];
-                    i++;
+            if (text_width <= right_width - 5) {
+                // Draw horizontal line before item (except first)
+                if (!first_line) {
+                    GFX_drawFastHLine(gfx, right_x, line_y - GFX_getFontHeight(gfx) - 2, right_width, GFX_BLACK);
                 }
-                truncated[i] = '\0';
-                strcat(truncated, "...");
-                GFX_setCursor(gfx, right_x, line_y);
-                GFX_printf(gfx, "%s", truncated);
-            } else {
+                
+                // Draw todo item
                 GFX_setCursor(gfx, right_x, line_y);
                 GFX_printf(gfx, "%s", token);
+                line_y += line_height;
+                line_count++;
+                first_line = false;
             }
-            line_y += line_height;
-            line_count++;
+            // If text overflows, skip this line (don't display)
         }
-        token = strtok(NULL, ";");
+        token = strtok(NULL, "\n");
     }
 }
 

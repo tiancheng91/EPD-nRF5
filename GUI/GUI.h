@@ -28,7 +28,7 @@ typedef struct {
     uint16_t voltage;
     char ssid[20];
     calendar_display_mode_t calendar_mode; /**< Calendar display mode */
-    char todo_string[64];                  /**< Todo items string (format: "item1; item2; ...", max 60 chars) */
+    char todo_string[64];                  /**< Todo items string (format: "item1\nitem2\n...", max 60 chars including \n) */
 } gui_data_t;
 
 void DrawGUI(gui_data_t* data, buffer_callback callback, void* callback_data);

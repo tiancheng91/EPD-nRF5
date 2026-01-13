@@ -87,7 +87,8 @@ code {
 
 input[type=text],
 input[type=number],
-select {
+select,
+textarea {
     font-size: 1rem;
     font-weight: 400;
     line-height: 1.5;
@@ -97,6 +98,12 @@ select {
     padding: .2rem .75rem;
     max-width: 100%;
     box-sizing: border-box;
+}
+
+textarea {
+    padding: .5rem .75rem;
+    line-height: 1.5;
+    font-family: inherit;
 }
 
 input[type=file] {
@@ -121,7 +128,8 @@ select {
 }
 
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
     border: 1px solid #86b7fe;
     box-shadow: 0 0 4px rgba(0, 120, 215, 0.8);
     outline: 0;
@@ -129,7 +137,8 @@ select:focus {
 
 input[type=text]:disabled,
 input[type=number]:disabled,
-select:disabled {
+select:disabled,
+textarea:disabled {
     opacity: 0.65;
     cursor: not-allowed;
     background-color: #e9ecef;
@@ -375,7 +384,8 @@ canvas.text-placement-mode {
 
     input[type=text],
     input[type=number],
-    select {
+    select,
+    textarea {
         max-width: 100%;
         margin-bottom: 5px;
     }
@@ -408,7 +418,8 @@ body.dark-mode code {
 
 body.dark-mode input[type=text],
 body.dark-mode input[type=number],
-body.dark-mode select {
+body.dark-mode select,
+body.dark-mode textarea {
     background-color: var(--dark-input-bg);
     color: var(--dark-input-text);
     border-color: var(--dark-border);
@@ -416,7 +427,8 @@ body.dark-mode select {
 
 body.dark-mode input[type=text]:disabled,
 body.dark-mode input[type=number]:disabled,
-body.dark-mode select:disabled {
+body.dark-mode select:disabled,
+body.dark-mode textarea:disabled {
     background-color: #1a1a1a;
     color: #666;
     border-color: #2a2a2a;
